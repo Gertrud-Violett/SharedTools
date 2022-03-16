@@ -7,7 +7,8 @@ Refer to file for usage instructions.
 https://colab.research.google.com/drive/19o7tcvXi9l2F-iFdlW96cBVlMfszp05E?usp=sharing
 
 ## RocketCEA
-sample code for RocketCEA usage demo
+Sample code for RocketCEA usage demo. Refer to homepage for usage.
+https://makkiblog.com/rocketcea_intro/
 
 ## ROSS
 Sample Rotor model with fork from ROSS open source rotordynamic analysis software
