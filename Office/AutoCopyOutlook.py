@@ -15,11 +15,11 @@ lag = 1
 outlook = Dispatch("Outlook.Application").GetNamespace("MAPI")
 inbox = outlook.GetDefaultFolder("6") #Received Tray
 MAIL = inbox.Folders("namefolder")  
-Proto = MAIL.Items
+MItem = MAIL.Items
 val_date = (date.date.today() - date.timedelta(lag)).strftime("%y%m%d")
 
 
-for msg in Proto:
+for msg in MItem:
     #print(msg) 
     rec = (int(msg.SentOn.strftime("%y%m%d")) - int(val_date))
     #print(msg.SentOn.strftime("%y%m%d"))
