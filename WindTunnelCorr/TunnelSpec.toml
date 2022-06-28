@@ -1,0 +1,32 @@
+#Setting file for WindTunnelCorr.py
+#Wind Tunnel Specs:
+[WINDTUNNEL]
+  [WINDTUNNEL.Nozzle]
+    Height = 4.0
+    Width = 7.0
+    dpdx = -0.0016 #Static pressure differential at nozzle outlet
+    ContracRatio = 6.0 #Nozzle Contraction Ratio
+  [WINDTUNNEL.Collector]
+    Height = 5.5
+    Width = 7.0
+    dpdx = -0.0006 #Static pressure differential at collector inlet
+
+  [WINDTUNNEL.TestSection]
+    xm = 5.0 #x_m distance from nozzle to model center
+    SecLength = 10.5 #Target Section Length [m]
+
+
+#Vehicle Specs: 
+[VEHICLE]
+  [VEHICLE.Spec]
+    Volume = 6.5 #vehicle volume in m3
+    Length = 4.4 #vehicle length
+    FrontArea = 2.058 #vehicle frontal area at AoA 0
+    Height = 1.41 #vehicle height in m
+    Width = 1.72 #vehicle width
+    yaw = 0 #yaw AoA
+    
+#Calculation Settings: name
+[CALC_SETTING]
+  Casename = "Demo_run"
+  
