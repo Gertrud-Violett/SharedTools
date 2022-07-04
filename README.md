@@ -24,5 +24,5 @@ Wind Tunnel Tool. Refer to explanation page for details:
 WIP
 ### TunnelSpec.toml
 Setting file for wind tunnel and vehicle spec
-###WindTunnelCorr.py
+### WindTunnelCorr.py
 Main calculation file
