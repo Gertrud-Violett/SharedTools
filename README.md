@@ -20,4 +20,9 @@ https://makkiblog.com/rocketcea_intro/
 Sample Rotor model with fork from ROSS open source rotordynamic analysis software
 
 ## WindTunnelCorr
-Wind Tunnel Tool (WIP)
+Wind Tunnel Tool. Refer to explanation page for details:
+WIP
+### TunnelSpec.toml
+Setting file for wind tunnel and vehicle spec
+###WindTunnelCorr.py
+Main calculation file
