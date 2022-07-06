@@ -101,6 +101,11 @@ def WTcalc(type,C_Dm,H_N,H_C,W_N,xm,dpdx_N,dpdx_C,M):
     else:
         print("input error: syntax is (open/close)")
 
+"""
+#Single point
+CDm=WTcalc(type,CD_measured,H_N,H_C,W_N,xm,dpdx_N,dpdx_C,M)
+print(CDm)
+"""
 
 #Sensitivity Analysis
 num=30
