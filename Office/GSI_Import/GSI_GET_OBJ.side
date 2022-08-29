@@ -1,0 +1,288 @@
+{
+  "id": "101e2681-1e0a-449b-99ab-964376bfa4b2",
+  "version": "2.0",
+  "name": "GSI Test",
+  "url": "https://maps.gsi.go.jp",
+  "tests": [{
+    "id": "6f11b629-526b-460a-81f3-003a10cbf3ab",
+    "name": "GSI Map Capture",
+    "commands": [{
+      "id": "e4792e1a-421f-452f-a89d-bc8c3deea4d5",
+      "comment": "",
+      "command": "open",
+      "target": "/",
+      "targets": [],
+      "value": ""
+    }, {
+      "id": "8c6f38f2-94a0-4e5c-8f7b-a6038736dc4c",
+      "comment": "",
+      "command": "setWindowSize",
+      "target": "1936x1056",
+      "targets": [],
+      "value": ""
+    }, {
+      "id": "fd8e95fa-e60d-4060-9f00-1e16f1950a7f",
+      "comment": "",
+      "command": "click",
+      "target": "id=query",
+      "targets": [
+        ["id=query", "id"],
+        ["name=query", "name"],
+        ["css=#query", "css:finder"],
+        ["xpath=//input[@id='query']", "xpath:attributes"],
+        ["xpath=//form[@id='search_f']/input", "xpath:idRelative"],
+        ["xpath=//input", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "afa32d1e-c96d-45b7-85e5-38d989619f7a",
+      "comment": "",
+      "command": "type",
+      "target": "id=query",
+      "targets": [
+        ["id=query", "id"],
+        ["name=query", "name"],
+        ["css=#query", "css:finder"],
+        ["xpath=//input[@id='query']", "xpath:attributes"],
+        ["xpath=//form[@id='search_f']/input", "xpath:idRelative"],
+        ["xpath=//input", "xpath:position"]
+      ],
+      "value": "35.0 135.0"
+    }, {
+      "id": "dc04686e-09cf-46ea-83e8-97caf4f906a8",
+      "comment": "",
+      "command": "sendKeys",
+      "target": "id=query",
+      "targets": [
+        ["id=query", "id"],
+        ["name=query", "name"],
+        ["css=#query", "css:finder"],
+        ["xpath=//input[@id='query']", "xpath:attributes"],
+        ["xpath=//form[@id='search_f']/input", "xpath:idRelative"],
+        ["xpath=//input", "xpath:position"]
+      ],
+      "value": "${KEY_ENTER}"
+    }, {
+      "id": "a2c9b8da-0c86-4909-8102-1279cb2e378e",
+      "comment": "",
+      "command": "mouseOver",
+      "target": "css=.gsi-header-tool-icon:nth-child(5) > .title",
+      "targets": [
+        ["css=.gsi-header-tool-icon:nth-child(5) > .title", "css:finder"],
+        ["xpath=//div[@id='header']/div[3]/a[5]/span", "xpath:idRelative"],
+        ["xpath=//a[5]/span", "xpath:position"],
+        ["xpath=//span[contains(.,'ツール')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "248e9182-fc5b-48a5-8330-cd4e84d482a9",
+      "comment": "",
+      "command": "click",
+      "target": "css=.gsi-header-tool-icon:nth-child(5) > .title",
+      "targets": [
+        ["css=.gsi-header-tool-icon:nth-child(5) > .title", "css:finder"],
+        ["xpath=//div[@id='header']/div[3]/a[5]/span", "xpath:idRelative"],
+        ["xpath=//a[5]/span", "xpath:position"],
+        ["xpath=//span[contains(.,'ツール')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "3d35433a-9ffa-4b2d-ac80-121836ec9c18",
+      "comment": "",
+      "command": "mouseOut",
+      "target": "css=.gsi-header-tool-icon:nth-child(5) > .title",
+      "targets": [
+        ["css=.gsi-header-tool-icon:nth-child(5) > .title", "css:finder"],
+        ["xpath=//div[@id='header']/div[3]/a[5]/span", "xpath:idRelative"],
+        ["xpath=//a[5]/span", "xpath:position"],
+        ["xpath=//span[contains(.,'ツール')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "8a4726e3-decb-4704-9b22-55d968fd5782",
+      "comment": "",
+      "command": "mouseOver",
+      "target": "linkText=３D",
+      "targets": [
+        ["linkText=３D", "linkText"],
+        ["css=li:nth-child(6) > .image-only", "css:finder"],
+        ["xpath=(//a[contains(@href, 'javascript:void(0);')])[43]", "xpath:href"],
+        ["xpath=//div[9]/ul/li[6]/a", "xpath:position"],
+        ["xpath=//a[contains(.,'３D')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "225a99af-367d-4e74-be1c-12c2aa8dafb8",
+      "comment": "",
+      "command": "click",
+      "target": "linkText=３D",
+      "targets": [
+        ["linkText=３D", "linkText"],
+        ["css=li:nth-child(6) > .image-only", "css:finder"],
+        ["xpath=(//a[contains(@href, 'javascript:void(0);')])[43]", "xpath:href"],
+        ["xpath=//div[9]/ul/li[6]/a", "xpath:position"],
+        ["xpath=//a[contains(.,'３D')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "54a6f845-22d4-4371-89f7-d04f30a37d53",
+      "comment": "",
+      "command": "mouseOut",
+      "target": "linkText=３D",
+      "targets": [
+        ["linkText=３D", "linkText"],
+        ["css=li:nth-child(6) > .image-only", "css:finder"],
+        ["xpath=(//a[contains(@href, 'javascript:void(0);')])[43]", "xpath:href"],
+        ["xpath=//div[9]/ul/li[6]/a", "xpath:position"],
+        ["xpath=//a[contains(.,'３D')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "d31b4456-e47a-4bf1-94e6-7c300b637191",
+      "comment": "",
+      "command": "mouseOver",
+      "target": "css=.gsi-menu-popuppanel > a:nth-child(1) > .title",
+      "targets": [
+        ["css=.gsi-menu-popuppanel > a:nth-child(1) > .title", "css:finder"],
+        ["xpath=//div[10]/a/div", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "c20cbee3-bbd8-4ab4-857f-7524614a4519",
+      "comment": "",
+      "command": "mouseOut",
+      "target": "css=.gsi-menu-popuppanel > a:nth-child(1) > .title",
+      "targets": [
+        ["css=.gsi-menu-popuppanel > a:nth-child(1) > .title", "css:finder"],
+        ["xpath=//div[10]/a/div", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "95919a37-c09f-402a-9315-78bd1b178972",
+      "comment": "",
+      "command": "mouseOver",
+      "target": "css=a:nth-child(1) span:nth-child(3)",
+      "targets": [
+        ["css=a:nth-child(1) span:nth-child(3)", "css:finder"],
+        ["xpath=//a/div/span[2]", "xpath:position"],
+        ["xpath=//span[contains(.,'縦横2048px')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "6ff28fce-2918-40b7-b091-2aa663c79598",
+      "comment": "",
+      "command": "click",
+      "target": "css=a:nth-child(1) span:nth-child(3)",
+      "targets": [
+        ["css=a:nth-child(1) span:nth-child(3)", "css:finder"],
+        ["xpath=//a/div/span[2]", "xpath:position"],
+        ["xpath=//span[contains(.,'縦横2048px')]", "xpath:innerText"]
+      ],
+      "value": "",
+      "opensWindow": true,
+      "windowHandleName": "win738",
+      "windowTimeout": 2000
+    }, {
+      "id": "bf7786ea-3e17-486b-81c8-df51157c7bd7",
+      "comment": "",
+      "command": "mouseOut",
+      "target": "css=a:nth-child(1) span:nth-child(3)",
+      "targets": [
+        ["css=a:nth-child(1) span:nth-child(3)", "css:finder"],
+        ["xpath=//a/div/span[2]", "xpath:position"],
+        ["xpath=//span[contains(.,'縦横2048px')]", "xpath:innerText"]
+      ],
+      "value": ""
+    }, {
+      "id": "602bc11b-b02e-4361-9b62-a576e8793e4a",
+      "comment": "",
+      "command": "storeWindowHandle",
+      "target": "root",
+      "targets": [],
+      "value": ""
+    }, {
+      "id": "885ab106-6816-450d-b093-91385c480010",
+      "comment": "",
+      "command": "selectWindow",
+      "target": "handle=${win738}",
+      "targets": [],
+      "value": ""
+    }, {
+      "id": "c9e48318-c0b1-4f1a-a7f7-8e8d152a8be8",
+      "comment": "",
+      "command": "click",
+      "target": "css=tr:nth-child(4) #dl_three",
+      "targets": [
+        ["css=tr:nth-child(4) #dl_three", "css:finder"],
+        ["xpath=(//input[@id='dl_three'])[2]", "xpath:attributes"],
+        ["xpath=//div[@id='frame']/div[2]/div[3]/div/table/tbody/tr[4]/td[2]/input", "xpath:idRelative"],
+        ["xpath=//tr[4]/td[2]/input", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "821cdfba-1504-49d9-b53e-634d973c0a06",
+      "comment": "",
+      "command": "click",
+      "target": "linkText=ダウンロード",
+      "targets": [
+        ["linkText=ダウンロード", "linkText"],
+        ["css=.downloadfile:nth-child(6) .button", "css:finder"],
+        ["xpath=(//a[contains(text(),'ダウンロード')])[5]", "xpath:link"],
+        ["xpath=//a[@onclick=\"Download('dem.obj',this);\"]", "xpath:attributes"],
+        ["xpath=(//a[contains(@href, 'javascript:void(0);')])[12]", "xpath:href"],
+        ["xpath=//tr[6]/td[2]/a", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "571c9a13-c3ee-485e-b60e-fabcf7f9a3b1",
+      "comment": "",
+      "command": "waitForElementVisible",
+      "target": "css=.downloadfile:nth-child(7) .button",
+      "targets": [],
+      "value": "4000"
+    }, {
+      "id": "c74beb1a-f9cb-4406-a570-3a9b85ca5d3f",
+      "comment": "",
+      "command": "click",
+      "target": "css=.downloadfile:nth-child(7) .button",
+      "targets": [
+        ["css=.downloadfile:nth-child(7) .button", "css:finder"],
+        ["xpath=(//a[contains(text(),'ダウンロード')])[6]", "xpath:link"],
+        ["xpath=//a[@onclick=\"Download('dem.mtl',this);\"]", "xpath:attributes"],
+        ["xpath=(//a[contains(@href, 'javascript:void(0);')])[13]", "xpath:href"],
+        ["xpath=//tr[7]/td[2]/a", "xpath:position"]
+      ],
+      "value": ""
+    }, {
+      "id": "d3e13abd-8ffd-4c5e-9148-8de8e4c98f51",
+      "comment": "",
+      "command": "waitForElementVisible",
+      "target": "css=.downloadfile:nth-child(8) .button",
+      "targets": [],
+      "value": "4000"
+    }, {
+      "id": "cea6f222-95b0-471c-9a04-0e5f9faf3fba",
+      "comment": "",
+      "command": "click",
+      "target": "css=.downloadfile:nth-child(8) .button",
+      "targets": [
+        ["css=.downloadfile:nth-child(8) .button", "css:finder"],
+        ["xpath=(//a[contains(text(),'ダウンロード')])[7]", "xpath:link"],
+        ["xpath=//a[@onclick=\"Download('texture.png',this);\"]", "xpath:attributes"],
+        ["xpath=(//a[contains(@href, 'javascript:void(0);')])[14]", "xpath:href"],
+        ["xpath=//tr[8]/td[2]/a", "xpath:position"]
+      ],
+      "value": ""
+    }]
+  }],
+  "suites": [{
+    "id": "780575ac-d723-4d7c-ae4e-b4cc9c029b9f",
+    "name": "Default Suite",
+    "persistSession": false,
+    "parallel": false,
+    "timeout": 300,
+    "tests": ["6f11b629-526b-460a-81f3-003a10cbf3ab"]
+  }],
+  "urls": ["https://maps.gsi.go.jp/"],
+  "plugins": []
+}
