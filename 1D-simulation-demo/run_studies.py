@@ -44,7 +44,7 @@ def save(f, name):
 # =============================================================================== 揚水
 def study_pumped():
     t0 = time.time()
-    m = PumpedStorage(rain=make_rain(storm_day=5), demand=make_demand(heatwave_day=2))
+    m = PumpedStorage(rain=make_rain(storm_day=5), demand=make_demand(heatwave_day=2, heatwave_MW=950.0))
     r = simulate(m, 7 * DAY, 60.0, record_every=5)
     d = r["t"] / DAY
     dE = r["E_stored"][-1] - r["E_stored"][0]
@@ -66,30 +66,30 @@ def study_pumped():
     ax[3].fill_between(d, 0, r["rain"], color=LINK, alpha=0.6); style(ax[3], "降雨 [mm/h]", "経過日数（0=月曜）")
     for a in ax:
         a.axvspan(2, 3, color=AMBER, alpha=0.12); a.axvspan(5, 7, color="#dddddd", alpha=0.35)
-    ax[1].text(2.5, 34.5, "猛暑日", ha="center", fontsize=9, color=INK); ax[1].text(6.0, 34.5, "週末（低需要）", ha="center", fontsize=9, color=INK)
+    ax[1].text(2.5, 34.5, "猛暑日（要求950 MW）", ha="center", fontsize=9, color=INK); ax[1].text(6.0, 34.5, "週末（低需要）", ha="center", fontsize=9, color=INK)
     ax[3].text(5.15, 25, "豪雨 30 mm/h × 12 h", fontsize=9, color=INK, ha="right")
-    save(f, "1dcae2_11_ps_week.png")
+    save(f, "1dcae2_11_ps_week_v2.png")
 
     # --- 図2: ポンプ動作点（曲線の交点） ---
     f, ax = fig(1, 4.6, sharex=False)
     Q = np.linspace(0, 80, 200)
     ax[0].plot(Q, m.pump_H(Q), color=INK, lw=2.5, label="ポンプ Q-H 曲線（試験値）")
-    for H, c, lab, tx in [(S["ps_base"]["H_min"], LINK, f"系の要求（落差 {S['ps_base']['H_min']:.0f} m）", (58, 635)),
-                          (S["ps_base"]["H_max"], RED, f"系の要求（落差 {S['ps_base']['H_max']:.0f} m）", (36, 728))]:
+    for H, c, lab, tx in [(S["ps_base"]["H_min"], LINK, f"系の要求（落差 {S['ps_base']['H_min']:.0f} m）", (60, 640)),
+                          (S["ps_base"]["H_max"], RED, f"系の要求（落差 {S['ps_base']['H_max']:.0f} m）", (4, 722))]:
         ax[0].plot(Q, H + m.k_loss * Q ** 2, color=c, lw=2, ls="--", label=lab)
         Qop = m.pump_operating_point(H); ax[0].scatter([Qop], [m.pump_H(Qop)], s=90, color=c, edgecolor=INK, zorder=5)
         ax[0].annotate(f"動作点 Q = {Qop:.1f} m³/s", (Qop, m.pump_H(Qop)), xytext=tx, fontsize=10, color=c, arrowprops=dict(arrowstyle="->", color=c, lw=1))
     ax[0].set_ylim(600, 830); ax[0].set_xlim(0, 80)
     style(ax[0], "動作点は「ポンプ」ではなく「系」が決める", "流量 Q [m³/s]（1台あたり）", "揚程 [m]")
     ax[0].legend(loc="upper right", fontsize=9, frameon=False)
-    save(f, "1dcae2_12_ps_operating_point.png")
+    save(f, "1dcae2_12_ps_operating_point_v2.png")
 
     # --- 図3: 豪雨強度スイープ → 越流損失・最高水位 ---
     rains = np.arange(0, 101, 10)
     spill, lvmax = [], []
     for mm in rains:
         mm_ = float(mm)
-        rr = simulate(PumpedStorage(rain=make_rain(storm_day=5, mm_per_h=mm_, hours=24.0), demand=make_demand(heatwave_day=2)), 7 * DAY, 60.0, record_every=20)
+        rr = simulate(PumpedStorage(rain=make_rain(storm_day=5, mm_per_h=mm_, hours=24.0), demand=make_demand(heatwave_day=2, heatwave_MW=950.0)), 7 * DAY, 60.0, record_every=20)
         spill.append(rr["E_spill"][-1]); lvmax.append(rr["level_u"].max())
     S["ps_rain"] = dict(rains=rains.tolist(), spill=spill, lvmax=lvmax)
     f, ax = fig(1, 4.4, sharex=False)
@@ -97,8 +97,8 @@ def study_pumped():
     style(ax[0], "パラメトリックスタディ①：豪雨強度 vs 越流損失（週末に24時間の豪雨）", "降雨強度 [mm/h]", "損失 [GWh]")
     ax2 = ax[0].twinx(); ax2.plot(rains, lvmax, "s--", color=LINK, lw=1.5, label="上池最高水位 [m]"); ax2.axhline(m.V_max / m.A, color=LINK, ls=":", lw=1)
     ax2.set_ylabel("上池最高水位 [m]", color=LINK); ax2.tick_params(colors=LINK); ax2.spines["top"].set_visible(False)
-    h1, l1 = ax[0].get_legend_handles_labels(); h2, l2 = ax2.get_legend_handles_labels(); ax[0].legend(h1 + h2, l1 + l2, loc="upper left", fontsize=9, frameon=False)
-    save(f, "1dcae2_13_ps_sweep_rain.png")
+    h1, l1 = ax[0].get_legend_handles_labels(); h2, l2 = ax2.get_legend_handles_labels(); ax[0].legend(h1 + h2, l1 + l2, loc="center left", fontsize=9, frameon=False)
+    save(f, "1dcae2_13_ps_sweep_rain_v2.png")
 
     # --- 図4: 需要ピークスイープ → 供給不足 ---
     peaks = np.arange(600, 1501, 100)
@@ -113,7 +113,7 @@ def study_pumped():
     ax2 = ax[0].twinx(); ax2.plot(peaks, lvmin, "o-", color=INK, lw=1.5, label="上池最低水位 [m]"); ax2.axhline(m.V_min / m.A, color=INK, ls=":", lw=1)
     ax2.set_ylabel("上池最低水位 [m]", color=INK); ax2.spines["top"].set_visible(False); ax2.set_ylim(0, 20)
     h1, l1 = ax[0].get_legend_handles_labels(); h2, l2 = ax2.get_legend_handles_labels(); ax[0].legend(h1 + h2, l1 + l2, loc="upper center", fontsize=9, frameon=False)
-    save(f, "1dcae2_14_ps_sweep_demand.png")
+    save(f, "1dcae2_14_ps_sweep_demand_v2.png")
 
 
 # =============================================================================== ロケット

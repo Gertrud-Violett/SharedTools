@@ -20,7 +20,7 @@ make_schematics.py  系統図の生成
 ```
 pip install -r requirements.txt
 python pumped_storage.py     # 7日間の運転を計算して要約を表示（約1秒）
-python gg_rocket.py          # 起動 3 秒を計算して定常値を表示（約5秒）
+python gg_rocket.py          # 起動 3 秒を計算して定常値を表示（約6秒）
 python run_studies.py        # 記事の全図を再生成（数分）
 python run_studies.py rocket # ロケットの図だけ再生成
 ```

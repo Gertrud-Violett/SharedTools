@@ -35,8 +35,8 @@ def bisect(f, a, b, n=40):
 
 
 class PumpedStorage(Model):
-    def __init__(self, n_units=2, V_max=12.67e6, A_res=4.0e5, H_base=653.0,
-                 k_loss=0.011, catch_up=5.0e6, runoff=0.6, rain=None, demand=None,
+    def __init__(self, n_units=2, V_max=12.67e6, A_res=4.0e5, H_base=680.0,
+                 k_loss=0.004, catch_up=5.0e6, runoff=0.6, rain=None, demand=None,
                  V_u0_frac=0.5, evap_mm_day=4.0, V_min_frac=0.05):
         self.n = n_units
         self.V_max, self.A, self.H_base, self.k_loss = V_max, A_res, H_base, k_loss
@@ -46,7 +46,9 @@ class PumpedStorage(Model):
         self.rain = rain or (lambda t: 0.0)          # mm/h
         self.demand = demand or default_demand       # MW（正=発電要求, 負=揚水余剰）
         # ---- ポンプ水車の試験曲線（1台あたり、定格 500 min-1）----
-        self.pump_H = Table1D([0, 20, 40, 50, 60, 70, 80], [800, 790, 765, 745, 720, 690, 650], "pump Q-H")
+        #   公表仕様（東芝レビュー 2006）: 揚水量 60 m3/s・最大軸入力 464 MW、水車 最大流量 85 m3/s・最大出力 482 MW
+        #   有効落差 653 m は水路損失を引いた後の値 → 静落差 680 m、k_loss=0.004（85 m3/s で約 29 m）で合わせる
+        self.pump_H = Table1D([0, 20, 40, 50, 60, 70, 80], [774, 764, 739, 719, 694, 664, 624], "pump Q-H")
         self.pump_eta = Table1D([0, 20, 40, 50, 60, 70, 80], [0.0, 0.55, 0.80, 0.88, 0.91, 0.90, 0.85], "pump eta")
         self.turb_eta = Table1D([0, 20, 40, 60, 75, 85], [0.0, 0.70, 0.85, 0.90, 0.91, 0.89], "turbine eta")
         self.Q_turb_max = 85.0     # m3/s /台
@@ -167,7 +169,7 @@ def make_rain(storm_day=None, mm_per_h=30.0, hours=12.0):
 
 if __name__ == "__main__":
     from onedsim import simulate
-    m = PumpedStorage(rain=make_rain(storm_day=5), demand=make_demand(heatwave_day=2))
+    m = PumpedStorage(rain=make_rain(storm_day=5), demand=make_demand(heatwave_day=2, heatwave_MW=950.0))
     res = simulate(m, t_end=7 * DAY, dt=60.0, method="rk4", record_every=5)
     print(f"7日間: 発電 {res['E_gen'][-1]:,.0f} MWh / 揚水 {res['E_pump'][-1]:,.0f} MWh "
           f"→ 往復効率 {res['E_gen'][-1] / res['E_pump'][-1]:.3f} / 越流損失 {res['E_spill'][-1]:,.0f} MWh")
