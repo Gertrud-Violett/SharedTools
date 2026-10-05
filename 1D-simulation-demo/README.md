@@ -1,6 +1,6 @@
 # 1D-simulation-demo (onedsim)
 
-Minimal 1D (lumped-parameter) system simulator in pure Python + numpy, with two demo models: a pumped-storage hydro plant and a gas-generator-cycle rocket engine (start-up to burn-out). Companion code for the makkiblog.com article series 【1Dシミュレーション】.
+Minimal 1D (lumped-parameter) system simulator in pure Python + numpy, with two demo models: a pumped-storage hydro plant and a gas-generator-cycle rocket engine (start-up, shutdown and burn-out). Companion code for the makkiblog.com article series 【1Dシミュレーション】.
 
 ## onedsim — まきブログ版・最小1Dシミュレーションエンジン
 
@@ -10,9 +10,10 @@ Minimal 1D (lumped-parameter) system simulator in pure Python + numpy, with two 
 ```
 onedsim.py          ソルバー本体（Table1D / bisect / Model / simulate / sweep）約170行
 pumped_storage.py   揚水発電所のモデル（神流川発電所の公表値を参考にした数値）
-gg_rocket.py        ガスジェネレータサイクルのロケットエンジン（Merlin 1D 級）。設計計算 + 起動〜燃焼終了の動的モデル
+gg_rocket.py        ガスジェネレータサイクルのロケットエンジン（Merlin 1D 級）。設計計算 + 起動・停止・燃焼終了までの動的モデル
 cea_tables.py       gg_rocket.py に埋め込んだ燃焼ガスの表を RocketCEA で作り直すスクリプト（任意）
 run_studies.py      記事のグラフと数値をまとめて再計算（./fig に PNG と summary.json を出力）
+test_gg_rocket.py   ロケットエンジンのモデルの確認（定常値、エネルギーと質量の保存、手順を変えたときの向き）。pytest で実行
 ```
 
 ## 動かし方
@@ -20,11 +21,24 @@ run_studies.py      記事のグラフと数値をまとめて再計算（./fig 
 ```
 pip install -r requirements.txt
 python pumped_storage.py       # 7日間の運転を計算して要約を表示（約1秒）
-python gg_rocket.py            # 設計計算（教科書の値に置き換えた場合も）と、起動 3 秒の結果を表示（数秒）
+python gg_rocket.py            # 設計計算（教科書の値に置き換えた場合も）と、起動から停止までの結果を表示（数秒）
 python run_studies.py          # 記事の全グラフを再生成（10〜15分）
 python run_studies.py pumped   # 揚水発電所だけ
 python run_studies.py rocket   # ロケットエンジンだけ
+python run_studies.py solver   # 時間積分の方法の図だけ
 ```
+
+uv を使う場合は、次のどちらでも動きます。
+
+```
+uv run --with-requirements requirements.txt pumped_storage.py   # ライブラリの用意から実行まで 1 行（仮想環境を残さない）
+
+uv venv                                  # 仮想環境を作って使う場合
+uv pip install -r requirements.txt
+uv run python run_studies.py
+```
+
+モデルの確認は `pip install pytest` のあと `python -m pytest -q` で実行できます（1分ほど）。uv なら `uv run --with pytest --with-requirements requirements.txt python -m pytest -q` です。
 
 ## 自分のモデルを作る
 
@@ -42,7 +56,7 @@ res = simulate(Tank(), t_end=100, dt=0.1)      # res["t"], res["V"], res["level"
 - 時間積分は `method="rk4"`（4段ルンゲ＝クッタ法、既定）/ `"rk2"`（2段ルンゲ＝クッタ法）/ `"euler"`（オイラー法）から選べます。
 - ポンプの Q-H 曲線のような特性データは `Table1D(x, y)` に入れて `table(q)` で引きます。範囲の外は端の値で止まります。
 - 部品どうしのつり合い点（ポンプ曲線と配管抵抗の交点など）は `bisect(f, a, b)` で探します。
-- 計算が発散すると `FloatingPointError` が出ます。発散する直前までの記録は例外の `.result` に入っています。
+- 状態量が無限大や NaN になったとき（または途中の計算で負の数の平方根などが出たとき）は `FloatingPointError` が出ます。そこまでの記録は例外の `.result` に入っています。値が有限のまま発散する場合（振動し続ける、ありえない値に張り付く）は例外になりません。時間刻みを半分にして結果が変わらないかを確認してください。
 
 ## 揚水発電所のモデル
 
@@ -82,17 +96,25 @@ GGEngine(mcc_lox_scale=0.9)             # 主燃焼室の LOX 噴射器を -10 %
 GGEngine(A_gg_orifice_scale=0.5)        # GG のオリフィスを両方とも 50 % に絞る（推力を絞る）
 GGEngine(gg_lox_lag=-0.01)              # GG の LOX 弁を燃料弁より 10 ms 先に開く（マイナス = LOX が先）
 GGEngine(main_lox_lag=0.05)             # 主 LOX 弁を燃料弁より 50 ms 遅らせる
-GGEngine(main_valve_t=(0.3, 1.2))       # 主弁の開き始めと全開の時刻
-GGEngine(gg_valve_t=0.25)               # GG 弁を開く時刻
+GGEngine(main_valve_t=(0.2, 0.9))       # 主弁の開き始めと全開の時刻（既定は 0.2〜0.5 秒）
+GGEngine(gg_valve_t=0.25)               # GG 弁を開く時刻（既定は 0.15 秒）
 GGEngine(spin_torque=150.0)             # 起動トルク [N·m]（スピンスタートの強さ。既定は 250 N·m を 0.5 秒間）
 GGEngine(burn_time=150.0)               # タンクに積む推進剤（設計流量 × 秒数）
+
+GGEngine(cutoff_t=1.5)                             # 1.5 秒で停止の指令を出す（GG 弁を 0.05 秒、主弁を 0.15 秒で閉じる。どちらも LOX 弁が 20 ms 先）
+GGEngine(cutoff_t=1.5, main_cut_t=(0.0, 0.05))     # 主弁を 0.05 秒で閉じる（指令から閉じ始め・閉じ切りまでの時間）
+GGEngine(cutoff_t=1.5, gg_cut_t=(0.15, 0.20))      # GG 弁を閉じ始めるのを 0.15 秒遅らせる（回転数が跳ね上がる）
+GGEngine(cutoff_t=1.5, gg_lox_cut_lag=0.01)        # GG の燃料弁を LOX 弁より 10 ms 先に閉じる（プラス = 燃料弁が先、マイナス = LOX 弁が先）
 ```
+
+既定の起動手順は、回転数と圧力の行き過ぎが 1〜2 % に収まるように決めたものです。主弁を開くのを遅らせたり、起動トルクを強くしたりすると、回転数が大きく行き過ぎます。
 
 燃焼ガスの表（燃焼温度 `T_AD`、特性排気速度 `CSTAR`、真空推力係数 `CF_VAC`）は、O/F 0.8 以上が化学平衡計算（RocketCEA、9.7 MPa）、
 燃料過剰の GG の領域（O/F 0.30〜0.52）が Huzel & Huang "Design of Liquid Propellant Rocket Engines"（NASA SP-125）Table 6-4 の代表値です（そのあいだと 0.30 より下は、点をつないで補っています）。
 `cea_tables.py` を実行すると、平衡計算の部分を作り直せます（`pip install rocketcea` が必要）。
 
-このモデルに入っていないもの: 着火の遅れ、配管の慣性と圧力波、燃焼の遅れ（チャギング）、再生冷却の熱、タンク圧の変化、ノズル内の流れの剥離。
+このモデルに入っていないもの: 着火の遅れ、配管の慣性と圧力波（水撃）、燃焼の遅れ（チャギング）、再生冷却の熱、弁より下流に残る推進剤、
+タンク圧の変化、機体の加速度やタンクの液面によるポンプ入口圧の変化とキャビテーション、ノズル内の流れの剥離。
 ポンプとタービンのマップの形は典型的なものを仮定しています（タービンは設計点で効率が最大）。
 
 ## ライセンス

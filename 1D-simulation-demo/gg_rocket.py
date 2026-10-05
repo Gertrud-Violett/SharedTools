@@ -2,7 +2,7 @@
 ガスジェネレータ（GG）サイクル液体ロケットエンジンの1Dモデル（onedsim デモ②）
 ==========================================================================
 Merlin 1D 級（LOX/RP-1、燃焼圧 9.7 MPa、海面推力 845 kN）を題材に、
-タンク → ターボポンプ → 主燃焼室 / ガスジェネレータ → タービン を1本の軸でつないだ系を解きます。
+タンク → ターボポンプ → 主燃焼室 / ガスジェネレータ → タービン を1本の軸でつないだ系を、起動から停止まで解きます。
 
 前提（まきブログ「SpaceX特集 第3回」の検証と同じ値。DESIGN にまとめてあります）:
   燃焼圧 9.7 MPa・主燃焼室の混合比 2.36・ノズル開口比 16、ポンプ効率 75 %、GG タービン効率 45 %・入口温度 900 K、
@@ -18,8 +18,10 @@ Merlin 1D 級（LOX/RP-1、燃焼圧 9.7 MPa、海面推力 845 kN）を題材�
   ノズル         : F = η CF_vac Pc At − Pa Ae
 
 状態量: m_f, m_o [kg], omega [rad/s], Pc, Pgg [Pa], Tc, Tgg [K]
-起動シーケンス: t = 0 スピンスタート（0.5 s の起動トルク）→ 0.15 s GG 弁 → 0.3–0.9 s 主弁ランプ開
+起動シーケンス: t = 0 スピンスタート（0.5 s の起動トルク）→ 0.15 s GG 弁 → 0.2–0.5 s 主弁ランプ開
                （燃料弁と LOX 弁は別々。gg_lox_lag / main_lox_lag で LOX 弁を遅らせる。負なら先行）
+停止シーケンス: cutoff_t に停止の指令 → GG 弁（0.05 s）と主弁（0.15 s）を閉じる。gg_cut_t / main_cut_t は、指令から閉じ始め・閉じ切りまでの時間
+               （LOX 弁を 20 ms 先に閉じて燃料過剰のまま止める。gg_lox_cut_lag / main_lox_cut_lag が負なら燃料弁が、正なら LOX 弁がその分遅れて閉じる）
 """
 from __future__ import annotations
 import math
@@ -43,6 +45,17 @@ def unchoke(P_back, P, gamma):
     if r <= (2 / (gamma + 1)) ** (gamma / (gamma - 1)):
         return 1.0
     return math.sqrt(2 / (gamma - 1) * (r ** (2 / gamma) - r ** ((gamma + 1) / gamma))) / (2 / (gamma + 1)) ** ((gamma + 1) / (2 * (gamma - 1)))
+
+
+def crossing_time(t, y, level, rising=True):
+    """y が初めて level 以上（rising=False なら level 以下）になる時刻。記録点のあいだは直線で補間する。達しなければ None"""
+    past = (lambda v: v >= level) if rising else (lambda v: v <= level)
+    for i in range(len(y)):
+        if past(y[i]):
+            if i == 0:                               # 最初の記録点ですでに条件を満たしている
+                return float(t[0])
+            return float(t[i - 1] + (level - y[i - 1]) / (y[i] - y[i - 1]) * (t[i] - t[i - 1]))
+    return None
 
 
 # ============================================================================= 部品の特性（表）
@@ -140,7 +153,8 @@ def design_point(**kw):
 # ============================================================================= 動的モデル
 class GGEngine(Model):
     def __init__(self, gg_lox_scale=1.0, mcc_lox_scale=1.0, A_gg_orifice_scale=1.0, gg_lox_lag=0.0, main_lox_lag=0.0,
-                 gg_valve_t=0.15, main_valve_t=(0.30, 0.90), spin_torque=250.0, spin_time=0.5,
+                 gg_valve_t=0.15, main_valve_t=(0.20, 0.50), spin_torque=250.0, spin_time=0.5,
+                 cutoff_t=None, gg_cut_t=(0.0, 0.05), main_cut_t=(0.0, 0.15), gg_lox_cut_lag=-0.02, main_lox_cut_lag=-0.02,
                  eta_turb=None, burn_time=150.0, T_init=300.0, design=None):
         d = self.d = design or design_point()
         for k in ("A_t", "A_e", "V_c", "V_gg", "A_tn", "J", "P_exh", "P_tank", "omega_d", "dPd_f", "dPd_o", "Qd_f", "Qd_o", "Wd_f", "Wd_o", "dh"):
@@ -156,15 +170,28 @@ class GGEngine(Model):
         self.spin_torque, self.spin_time = spin_torque, spin_time
         self.gg_valve_t, self.main_valve_t = gg_valve_t, main_valve_t
         self.gg_lox_lag, self.main_lox_lag = gg_lox_lag, main_lox_lag
+        # 停止シーケンス（cutoff_t = None なら停止しない）。弁が動くのは必ず指令のあと
+        assert 0.0 <= gg_cut_t[0] < gg_cut_t[1] and 0.0 <= main_cut_t[0] < main_cut_t[1], "gg_cut_t / main_cut_t は (閉じ始め, 閉じ切り) を 0 ≤ 閉じ始め < 閉じ切り で指定してください"
+        self.cutoff_t, self.gg_cut_t, self.main_cut_t = cutoff_t, gg_cut_t, main_cut_t
+        self.gg_lox_cut_lag, self.main_lox_cut_lag = gg_lox_cut_lag, main_lox_cut_lag
         self.T_init = T_init
 
     # ---------------- 弁の開度（0〜1） ----------------
-    def valve_main(self, t, lag=0.0):
-        t0, t1 = self.main_valve_t
-        return min(max((t - t0 - lag) / (t1 - t0), 0.0), 1.0)
+    def closing(self, t, cut_t, lag):
+        """停止の指令（cutoff_t）のあと、弁が閉じていく割合（1 = 開いたまま、0 = 全閉）。lag ≥ 0 はその弁だけ遅らせる時間"""
+        if self.cutoff_t is None:
+            return 1.0
+        c0, c1 = cut_t
+        return 1.0 - min(max((t - self.cutoff_t - lag - c0) / (c1 - c0), 0.0), 1.0)
 
-    def valve_gg(self, t, lag=0.0):
-        return min(max((t - self.gg_valve_t - lag) / 0.1, 0.0), 1.0)
+    def valve_main(self, t, lox=False):
+        t0, t1 = self.main_valve_t
+        lag, cut_lag = (self.main_lox_lag, max(self.main_lox_cut_lag, 0.0)) if lox else (0.0, max(-self.main_lox_cut_lag, 0.0))
+        return min(min(max((t - t0 - lag) / (t1 - t0), 0.0), 1.0), self.closing(t, self.main_cut_t, cut_lag))
+
+    def valve_gg(self, t, lox=False):
+        lag, cut_lag = (self.gg_lox_lag, max(self.gg_lox_cut_lag, 0.0)) if lox else (0.0, max(-self.gg_lox_cut_lag, 0.0))
+        return min(min(max((t - self.gg_valve_t - lag) / 0.1, 0.0), 1.0), self.closing(t, self.gg_cut_t, cut_lag))
 
     # ---------------- 部品：ポンプの動作点 ----------------
     def pump_point(self, rho, Qd, dPd, w, cda_c, cda_g, Pc, Pgg, has_liquid):
@@ -186,8 +213,8 @@ class GGEngine(Model):
     def flows(self, t, s):
         Pc, Pgg, Tc, Tgg = s["Pc"], s["Pgg"], s["Tc"], s["Tgg"]
         w = s["omega"] / self.omega_d
-        xm_f, xm_o = self.valve_main(t), self.valve_main(t, self.main_lox_lag)
-        xg_f, xg_o = self.valve_gg(t), self.valve_gg(t, self.gg_lox_lag)
+        xm_f, xm_o = self.valve_main(t), self.valve_main(t, lox=True)
+        xg_f, xg_o = self.valve_gg(t), self.valve_gg(t, lox=True)
         has_f, has_o = s["m_f"] > 0, s["m_o"] > 0
         if not (has_f and has_o):                              # どちらかのタンクが空 → 全弁を閉じてエンジン停止
             xm_f = xm_o = xg_f = xg_o = 0.0
@@ -261,7 +288,7 @@ class GGEngine(Model):
                     mdot_c=m_c, mdot_gg=m_g, gg_pct=100 * m_g / max(m_c + m_g, 1e-6),
                     OF_mcc=f["of_c"], OF_gg=f["of_g"], OF_engine=self.of_ratio(f["mo_c"] + f["mo_g"], f["mf_c"] + f["mf_g"]),
                     T_c_K=s["Tc"], T_gg_K=s["Tgg"], W_t_MW=f["W_t"] / 1e6, W_p_MW=(f["W_f"] + f["W_o"]) / 1e6, eta_t=f["eta_t"],
-                    valve_main=self.valve_main(t), valve_gg=self.valve_gg(t))
+                    valve_main=self.valve_main(t), valve_main_lox=self.valve_main(t, lox=True), valve_gg=self.valve_gg(t), valve_gg_lox=self.valve_gg(t, lox=True))
 
 
 if __name__ == "__main__":
@@ -272,8 +299,13 @@ if __name__ == "__main__":
     h = design_point(**HH_A1)
     print(f"教科書の例題エンジンのターボポンプの値に置き換えた設計計算: GG {h['gg_frac']*100:.1f} %, ポンプ動力 {h['W_pump']/1e6:.2f} MW, "
           f"比推力 海面 {h['Isp_sl']:.1f} s / 真空 {h['Isp_vac']:.1f} s（公表値 282 s / 311 s）")
-    res = simulate(GGEngine(), t_end=3.0, dt=2e-4, method="rk4", record_every=10)
-    i = -1
-    print(f"t = 3 s: 推力 {res['F_kN'][i]:.0f} kN, Pc {res['Pc_MPa'][i]:.2f} MPa, {res['rpm'][i]:.0f} rpm（ピーク {res['rpm'].max():.0f}）, 比推力 {res['Isp'][i]:.1f} s, "
+    T_CUT = 3.0                                             # 3 秒で停止の指令を出す
+    res = simulate(GGEngine(cutoff_t=T_CUT), t_end=T_CUT + 1.0, dt=2e-4, method="rk4", record_every=10)
+    run, cut = res["t"] < T_CUT, res["t"] >= T_CUT
+    i = int(run.sum()) - 1                                  # 停止の指令の直前
+    print(f"t = 3 s: 推力 {res['F_kN'][i]:.0f} kN, Pc {res['Pc_MPa'][i]:.2f} MPa, {res['rpm'][i]:.0f} rpm（起動中のピーク {res['rpm'][run].max():.0f}）, 比推力 {res['Isp'][i]:.1f} s, "
           f"GG {res['gg_pct'][i]:.2f} %, O/F 主燃焼室 {res['OF_mcc'][i]:.3f} / GG {res['OF_gg'][i]:.3f}, Tc {res['T_c_K'][i]:.0f} K, Tgg {res['T_gg_K'][i]:.0f} K, "
           f"タービン {res['W_t_MW'][i]:.2f} MW / ポンプ {res['W_p_MW'][i]:.2f} MW")
+    F, tc = res["F_kN"][cut], res["t"][cut] - T_CUT
+    print(f"停止（3 s に指令）: {crossing_time(tc, F, 0.01 * F[0], rising=False):.2f} s で推力が 1 % 以下, 指令のあとの回転数のピーク {res['rpm'][cut].max():.0f} rpm, "
+          f"1 s 後 {res['rpm'][-1]:.0f} rpm, GG 出口温度のピーク {res['T_gg_K'][cut].max():.0f} K")

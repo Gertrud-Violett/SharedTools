@@ -8,7 +8,7 @@ from rocketcea.cea_obj import CEA_Obj
 
 PSI_PER_BAR = 14.5037738
 PC_BAR, EPS = 97.0, 16.0                      # Merlin 1D 級: 燃焼圧 9.7 MPa、ノズル開口比 16
-OFS = [0.6, 0.8, 1.0, 1.25, 1.5, 1.75, 2.0, 2.2, 2.36, 2.5, 2.8, 3.0, 3.4, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 30.0, 40.0, 60.0]
+OFS = [0.8, 1.0, 1.25, 1.5, 1.75, 2.0, 2.2, 2.36, 2.5, 2.8, 3.0, 3.4, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 30.0, 40.0, 60.0, 100.0]   # gg_rocket.py の _OF_CEA と同じ点
 
 if __name__ == "__main__":
     cea = CEA_Obj(oxName="LOX", fuelName="RP-1")
@@ -17,7 +17,7 @@ if __name__ == "__main__":
     for of in OFS:
         ivac, cstar_ft, tc_R = cea.get_IvacCstrTc(Pc=pc, MR=of, eps=EPS)
         mw, gam = cea.get_Chamber_MolWt_gamma(Pc=pc, MR=of, eps=EPS)
-        rows.append((of, tc_R / 1.8, cstar_ft * 0.3048, mw, gam, ivac))
+        rows.append(tuple(float(x) for x in (of, tc_R / 1.8, cstar_ft * 0.3048, mw, gam, ivac)))
     print("O/F     T[K]   c*[m/s]   M[g/mol]  gamma  Ivac[s]")
     for r in rows:
         print(f"{r[0]:5.2f} {r[1]:8.0f} {r[2]:8.0f} {r[3]:9.2f} {r[4]:7.3f} {r[5]:7.1f}")

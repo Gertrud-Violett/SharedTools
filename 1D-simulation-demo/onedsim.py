@@ -139,7 +139,7 @@ def simulate(model: Model, t_end: float, dt: float, method: str = "rk4",
         except (ValueError, OverflowError, ZeroDivisionError):      # 計算の途中で負の数の平方根などが出た
             diverged = True
         if diverged:
-            err = FloatingPointError(f"t={t:.4g}: 状態量が発散しました（dt を小さくするか、method='rk4'（4段ルンゲ＝クッタ法）を使ってください）")
+            err = FloatingPointError(f"t={t:.4g}: 状態量が発散しました（時間刻み dt を小さくしてください。method が 'euler' か 'rk2' なら、'rk4' にすると安定な範囲が広がります）")
             err.result = {k: np.asarray(v, float) for k, v in rec.items()}     # 発散する直前までの記録
             raise err
         t = i * dt
