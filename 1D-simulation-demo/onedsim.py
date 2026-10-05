@@ -6,6 +6,7 @@ onedsim — まきブログ版・最小1Dシミュレーションエンジン
   1. Table1D   : 試験で得た特性曲線（ポンプのQ-H曲線など）をテーブルとして引く
   2. Model     : 「状態量」と「その時間微分」を定義する（＝部品をつないだ系全体の方程式）
   3. simulate  : 微分方程式を時間積分する（オイラー法 / 2段・4段ルンゲ＝クッタ法）
+おまけとして、パラメータを振る sweep と、部品どうしの「つり合い点」を探す二分法 bisect が付いています。
 
 商用ソフト（Amesim, GT-SUITE, EcosimPro...）はこれに GUI・部品ライブラリ・陰解法ソルバーを
 足したものだと思ってください。依存は numpy のみです。
@@ -19,6 +20,7 @@ onedsim — まきブログ版・最小1Dシミュレーションエンジン
     res["t"], res["x"], res["x2"]  -> numpy 配列
 """
 from __future__ import annotations
+from bisect import bisect_right
 import numpy as np
 
 
@@ -32,9 +34,32 @@ class Table1D:
         self.name = name
         if np.any(np.diff(self.x) <= 0):
             raise ValueError(f"Table1D {name}: x は単調増加で与えてください")
+        self._x, self._y = self.x.tolist(), self.y.tolist()
 
     def __call__(self, xq):
-        return np.interp(xq, self.x, self.y)
+        if isinstance(xq, float):                    # 数値1個のときは自前で補間（numpy を通すより数倍速い）
+            x, y = self._x, self._y
+            if xq <= x[0]:
+                return y[0]
+            if xq >= x[-1]:
+                return y[-1]
+            i = bisect_right(x, xq)
+            return y[i - 1] + (y[i] - y[i - 1]) * (xq - x[i - 1]) / (x[i] - x[i - 1])
+        return np.interp(xq, self.x, self.y)         # 配列はまとめて補間
+
+
+def bisect(f, a, b, n=40):
+    """二分法: f(a) と f(b) の符号が違うとき、f(x)=0 になる x を返す。
+    ポンプ曲線と配管抵抗の交点（動作点）のような「部品どうしのつり合い」を解くのに使う。"""
+    fa = f(a)
+    for _ in range(n):
+        m = 0.5 * (a + b)
+        fm = f(m)
+        if fa * fm <= 0:
+            b = m
+        else:
+            a, fa = m, fm
+    return 0.5 * (a + b)
 
 
 # ----------------------------------------------------------------------------- 2. モデル基底
@@ -108,7 +133,15 @@ def simulate(model: Model, t_end: float, dt: float, method: str = "rk4",
 
     record(t, s)
     for i in range(1, n + 1):
-        s = model.clamp(step(model, t, s, dt))
+        try:
+            s = model.clamp(step(model, t, s, dt))
+            diverged = any(not np.isfinite(v) for v in s.values())
+        except (ValueError, OverflowError, ZeroDivisionError):      # 計算の途中で負の数の平方根などが出た
+            diverged = True
+        if diverged:
+            err = FloatingPointError(f"t={t:.4g}: 状態量が発散しました（dt を小さくするか、method='rk4'（4段ルンゲ＝クッタ法）を使ってください）")
+            err.result = {k: np.asarray(v, float) for k, v in rec.items()}     # 発散する直前までの記録
+            raise err
         t = i * dt
         if i % record_every == 0:
             record(t, s)
@@ -117,8 +150,6 @@ def simulate(model: Model, t_end: float, dt: float, method: str = "rk4",
             if i % record_every:
                 record(t, s)
             break
-        if any(not np.isfinite(v) for v in s.values()):
-            raise FloatingPointError(f"t={t:.4g}: 状態量が発散しました（dt を小さくするか、method='rk4'（4段ルンゲ＝クッタ法）を使ってください）")
     out = {k: np.asarray(v, float) for k, v in rec.items()}
     out["stopped"] = stopped
     return out
