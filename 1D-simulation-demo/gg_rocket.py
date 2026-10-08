@@ -12,12 +12,12 @@ Merlin 1D 級（LOX/RP-1、燃焼圧 9.7 MPa、海面推力 845 kN）を題材�
   ポンプ         : 相似則で無次元化した揚程マップ・軸動力マップ（本来は単体試験で取るもの）
   弁・噴射器     : ṁ = CdA √(2ρΔP)
   ポンプの動作点 : ポンプ曲線と、下流（弁・噴射器）の抵抗曲線の交点を二分法で探す
-  燃焼室 / GG    : 0D の容器。ガスの質量保存（圧力）と、燃焼温度への追従（温度）
+  燃焼室 / GG    : 0D の容器。ガスの質量保存（圧力）と、燃焼温度への追従（温度）。GG はガスの組成（O/F）も混ざりながら追従する
   燃焼ガスの特性 : 酸燃比 O/F の表。化学平衡計算（RocketCEA）＋ 燃料過剰側は教科書（Huzel & Huang）の代表値
   タービン       : 速度比（周速 ÷ ガスの噴出速度）で決まる効率マップ
   ノズル         : F = η CF_vac Pc At − Pa Ae
 
-状態量: m_f, m_o [kg], omega [rad/s], Pc, Pgg [Pa], Tc, Tgg [K]
+状態量: m_f, m_o [kg], omega [rad/s], Pc, Pgg [Pa], Tc, Tgg [K], Ygg（GG の中のガスの酸化剤の質量分率。O/F = Ygg/(1 − Ygg)）
 起動シーケンス: t = 0 スピンスタート（0.5 s の起動トルク）→ 0.15 s GG 弁 → 0.2–0.5 s 主弁ランプ開
                （燃料弁と LOX 弁は別々。gg_lox_lag / main_lox_lag で LOX 弁を遅らせる。負なら先行）
 停止シーケンス: cutoff_t に停止の指令 → GG 弁（0.05 s）と主弁（0.15 s）を閉じる。gg_cut_t / main_cut_t は、指令から閉じ始め・閉じ切りまでの時間
@@ -83,6 +83,13 @@ CSTAR = Table1D([0.0] + _OF_GG + _OF_CEA, [_cstar_fuel_rich(of) for of in [0.0] 
                 "特性排気速度 c*(O/F) [m/s]")
 CF_VAC = Table1D([1.5, 2.0, 2.2, 2.36, 2.5, 2.8, 3.4], [1.749, 1.783, 1.805, 1.823, 1.838, 1.860, 1.870], "真空推力係数 CF_vac(O/F)（開口比 16）")
 
+
+def gg_gas(Y):
+    """GG の中のガス（酸化剤の質量分率 Y）の定圧比熱 cp [J/kg/K]、比熱比、ガス定数 R [J/kg/K]"""
+    of = Y / max(1.0 - Y, 1e-9)
+    cp, gam = GG_CP(of), GG_GAMMA(of)
+    return cp, gam, cp * (gam - 1) / gam
+
 # --- ポンプ（相似則で無次元化。Qn = (Q/ω)/(Q_d/ω_d)）: 揚程 ΔP = ΔP_d (ω/ω_d)^2 g(Qn)、軸動力 W = W_d (ω/ω_d)^3 p(Qn)
 _QN = [0.0, 0.3, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.75]
 PUMP_HEAD = Table1D(_QN, [1.25, 1.24, 1.18, 1.10, 1.00, 0.85, 0.62, 0.30, 0.00], "ポンプ揚程マップ g(Qn)")
@@ -109,6 +116,7 @@ HH_A1 = dict(k_discharge_o=1.505, k_discharge_f=1.72, eta_pump_o=0.707, eta_pump
 def design_point(**kw):
     """ポンプ動力 = タービン動力 になる GG 流量を求め、スロートやオリフィスの大きさを決める（時間変化なしの計算）。"""
     d = dict(DESIGN, **kw)
+    assert d["eps"] == 16.0 and d["OF_c"] == 2.36, "CF_VAC の表は開口比 16、主燃焼室のガス定数（GGEngine.R_c）は O/F 2.36 の値です"
     Pc, Pgg = d["Pc"], d["k_gg"] * d["Pc"]
     # ポンプの吐出圧と効率は、LOX 側（_o）と燃料側（_f）を別々にも指定できる（省略すると共通の値）
     Pd_o, Pd_f = d.get("k_discharge_o", d["k_discharge"]) * Pc, d.get("k_discharge_f", d["k_discharge"]) * Pc
@@ -136,12 +144,14 @@ def design_point(**kw):
     mf_c, mo_c = m_c / (1 + d["OF_c"]), m_c * d["OF_c"] / (1 + d["OF_c"])
     mf_g, mo_g = m_g / (1 + OF_g), m_g * OF_g / (1 + OF_g)
     Qd_f, Qd_o = (mf_c + mf_g) / RHO_F, (mo_c + mo_g) / RHO_O
-    F_vac = d["F_sl"] + P_ATM * d["eps"] * A_t                               # 真空では背圧の分だけ推力が増える（排気ノズル分は無視）
+    T_e = T_out * (P_ATM / d["P_exh"]) ** ((gam - 1) / gam)                   # タービン排気ノズルの出口（大気圧まで膨張）の温度
+    A_exh = m_g * R_g * T_e / (P_ATM * v_exh)                                # 排気ノズルの出口面積（ṁ = ρ v A、ρ = P/(R T)）
+    F_vac = d["F_sl"] + P_ATM * (d["eps"] * A_t + A_exh)                     # 真空では、主ノズルと排気ノズルの出口で背圧の分だけ推力が増える
     Wd_f, Wd_o = Qd_f * dP_f / eta_f, Qd_o * dP_o / eta_o
     return dict(d, Pd=Pd_o, Pd_o=Pd_o, Pd_f=Pd_f, Pgg=Pgg, OF_g=OF_g, cp_g=cp, gam_g=gam, R_g=R_g, dh=dh, v_exh=v_exh,
                 m_c=m_c, m_g=m_g, mf_c=mf_c, mo_c=mo_c, mf_g=mf_g, mo_g=mo_g, gg_frac=m_g / (m_c + m_g),
                 OF_engine=(mo_c + mo_g) / (mf_c + mf_g),
-                A_t=A_t, D_t=2 * math.sqrt(A_t / math.pi), A_e=d["eps"] * A_t, V_c=d["L_star"] * A_t,
+                A_t=A_t, D_t=2 * math.sqrt(A_t / math.pi), A_e=d["eps"] * A_t, V_c=d["L_star"] * A_t, A_exh=A_exh,
                 A_tn=m_g * math.sqrt(R_g * d["T_gg"]) / (crit_flow(gam) * Pgg),         # タービンノズルののど面積
                 CdA_inj_f=mf_c / math.sqrt(2 * RHO_F * (Pd_f - Pc)), CdA_inj_o=mo_c / math.sqrt(2 * RHO_O * (Pd_o - Pc)),
                 CdA_gg_f=mf_g / math.sqrt(2 * RHO_F * (Pd_f - Pgg)), CdA_gg_o=mo_g / math.sqrt(2 * RHO_O * (Pd_o - Pgg)),
@@ -227,9 +237,8 @@ class GGEngine(Model):
         W_f = self.Wd_f * w ** 3 * PUMP_POWER(Q_f / (self.Qd_f * w)) if has_f else 0.0
         W_o = self.Wd_o * w ** 3 * PUMP_POWER(Q_o / (self.Qd_o * w)) if has_o else 0.0
         # --- GG とタービン
-        of_g = self.of_ratio(mo_g, mf_g)
-        cp, gam = GG_CP(of_g), GG_GAMMA(of_g)
-        R_g = cp * (gam - 1) / gam
+        of_g = self.of_ratio(mo_g, mf_g)                       # GG に流れ込む推進剤の O/F（燃焼温度はこれで決まる）
+        cp, gam, R_g = gg_gas(s["Ygg"])                        # タービンへ流れる、GG の中のガスの性質（組成は流入に遅れて追従）
         m_t = crit_flow(gam) * Pgg * self.A_tn / math.sqrt(R_g * Tgg) * unchoke(self.P_exh, Pgg, gam)
         dh = cp * Tgg * (1 - (self.P_exh / Pgg) ** ((gam - 1) / gam)) if Pgg > self.P_exh else 0.0
         x = w * math.sqrt(self.dh / dh) if dh > 0 else 2.0             # 速度比（設計点で 1）
@@ -247,14 +256,15 @@ class GGEngine(Model):
 
     # ---------------- 状態方程式 ----------------
     def initial_state(self):
-        return {"m_f": self.m_f0, "m_o": self.m_o0, "omega": 50.0, "Pc": P_ATM, "Pgg": P_ATM, "Tc": self.T_init, "Tgg": self.T_init}
+        return {"m_f": self.m_f0, "m_o": self.m_o0, "omega": 50.0, "Pc": P_ATM, "Pgg": P_ATM, "Tc": self.T_init, "Tgg": self.T_init, "Ygg": 0.0}
 
     @staticmethod
-    def chamber(P, T, V, R, m_in, m_out, T_target):
-        """0D の容器: 温度は燃焼温度にガスの入れ替わり時間 τ で追従、圧力はガスの質量保存（P = mRT/V の時間微分）"""
+    def chamber(P, T, V, R, m_in, m_out, T_target, dlnR=0.0):
+        """0D の容器: 温度は燃焼温度にガスの入れ替わり時間 τ で追従、圧力はガスの質量保存（P = mRT/V の時間微分）。
+        dlnR はガス定数の変化率 d(ln R)/dt（ガスの組成が変わる GG だけ。主燃焼室は R 一定）"""
         tau = (P * V / (R * T)) / m_in if m_in > 1e-6 else math.inf
         dT = (T_target - T) / tau
-        dP = R * T / V * (m_in - m_out) + P / T * dT
+        dP = R * T / V * (m_in - m_out) + P / T * dT + P * dlnR
         return dP, dT
 
     def derivatives(self, t, s):
@@ -266,18 +276,22 @@ class GGEngine(Model):
         T_c = self.d["eta_cstar"] ** 2 * T_AD(f["of_c"])
         dPc, dTc = self.chamber(s["Pc"], s["Tc"], self.V_c, self.R_c,
                                 f["mf_c"] + f["mo_c"], f["m_c_out"], T_c)
-        dPgg, dTgg = self.chamber(s["Pgg"], s["Tgg"], self.V_gg, f["R_g"],
-                                  f["mf_g"] + f["mo_g"], f["m_t"], T_AD(f["of_g"]))
+        m_in_g = f["mf_g"] + f["mo_g"]
+        m_gg = s["Pgg"] * self.V_gg / (f["R_g"] * s["Tgg"])                  # GG の中のガスの質量
+        dY = m_in_g * (f["mo_g"] / m_in_g - s["Ygg"]) / m_gg if m_in_g > 1e-6 else 0.0   # 流れ込んだ推進剤が混ざって組成が変わる
+        dlnR = (gg_gas(s["Ygg"] + 1e-6)[2] / f["R_g"] - 1.0) / 1e-6 * dY        # 組成が変わるとガス定数も変わる
+        dPgg, dTgg = self.chamber(s["Pgg"], s["Tgg"], self.V_gg, f["R_g"], m_in_g, f["m_t"], T_AD(f["of_g"]), dlnR)
         return {"m_f": -(f["mf_c"] + f["mf_g"]),        # タンクの質量保存
                 "m_o": -(f["mo_c"] + f["mo_g"]),
                 "omega": torque / self.J,
-                "Pc": dPc, "Pgg": dPgg, "Tc": dTc, "Tgg": dTgg}
+                "Pc": dPc, "Pgg": dPgg, "Tc": dTc, "Tgg": dTgg, "Ygg": dY}
 
     def clamp(self, s):
         s["m_f"], s["m_o"] = max(s["m_f"], 0.0), max(s["m_o"], 0.0)
         s["Pc"], s["Pgg"] = max(s["Pc"], P_ATM), max(s["Pgg"], P_ATM)
         s["omega"] = max(s["omega"], 1.0)
         s["Tc"], s["Tgg"] = min(max(s["Tc"], 250.0), 4000.0), min(max(s["Tgg"], 250.0), 4000.0)
+        s["Ygg"] = min(max(s["Ygg"], 0.0), 0.999)
         return s
 
     def outputs(self, t, s):
@@ -286,8 +300,10 @@ class GGEngine(Model):
         return dict(F_kN=f["F"] / 1e3, Isp=f["F"] / (max(m_c + m_g, 1e-6) * G0), rpm=s["omega"] * 60 / (2 * math.pi),
                     Pc_MPa=s["Pc"] / 1e6, Pgg_MPa=s["Pgg"] / 1e6, Pd_f_MPa=f["Pd_f"] / 1e6, Pd_o_MPa=f["Pd_o"] / 1e6,
                     mdot_c=m_c, mdot_gg=m_g, gg_pct=100 * m_g / max(m_c + m_g, 1e-6),
-                    OF_mcc=f["of_c"], OF_gg=f["of_g"], OF_engine=self.of_ratio(f["mo_c"] + f["mo_g"], f["mf_c"] + f["mf_g"]),
+                    OF_mcc=f["of_c"], OF_gg=f["of_g"], OF_gg_gas=s["Ygg"] / (1.0 - s["Ygg"]), OF_engine=self.of_ratio(f["mo_c"] + f["mo_g"], f["mf_c"] + f["mf_g"]),
                     T_c_K=s["Tc"], T_gg_K=s["Tgg"], W_t_MW=f["W_t"] / 1e6, W_p_MW=(f["W_f"] + f["W_o"]) / 1e6, eta_t=f["eta_t"],
+                    mdot_c_out=f["m_c_out"], mdot_t=f["m_t"],                                    # 容器から出ていく流量（ノズル・タービン）
+                    m_gas_c=s["Pc"] * self.V_c / (self.R_c * s["Tc"]), m_gas_gg=s["Pgg"] * self.V_gg / (f["R_g"] * s["Tgg"]),   # 容器の中のガスの質量
                     valve_main=self.valve_main(t), valve_main_lox=self.valve_main(t, lox=True), valve_gg=self.valve_gg(t), valve_gg_lox=self.valve_gg(t, lox=True))
 
 

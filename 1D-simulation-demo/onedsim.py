@@ -32,8 +32,8 @@ class Table1D:
         self.x = np.asarray(x, float)
         self.y = np.asarray(y, float)
         self.name = name
-        if np.any(np.diff(self.x) <= 0):
-            raise ValueError(f"Table1D {name}: x は単調増加で与えてください")
+        if self.x.ndim != 1 or self.x.shape != self.y.shape or not np.all(np.isfinite(self.x) & np.isfinite(self.y)) or np.any(np.diff(self.x) <= 0):
+            raise ValueError(f"Table1D {name}: x と y は同じ長さの有限の値で、x は単調増加で与えてください")
         self._x, self._y = self.x.tolist(), self.y.tolist()
 
     def __call__(self, xq):
@@ -51,7 +51,9 @@ class Table1D:
 def bisect(f, a, b, n=40):
     """二分法: f(a) と f(b) の符号が違うとき、f(x)=0 になる x を返す。
     ポンプ曲線と配管抵抗の交点（動作点）のような「部品どうしのつり合い」を解くのに使う。"""
-    fa = f(a)
+    fa, fb = f(a), f(b)
+    if not fa * fb <= 0:                         # 解をはさんでいない（端でちょうど 0 になるのはよい）
+        raise ValueError(f"bisect: f({a:g}) と f({b:g}) が同じ符号です。解をはさむ区間を与えてください")
     for _ in range(n):
         m = 0.5 * (a + b)
         fm = f(m)
@@ -119,37 +121,40 @@ def simulate(model: Model, t_end: float, dt: float, method: str = "rk4",
     s = dict(model.initial_state())
     t = 0.0
     n = int(round(t_end / dt))
+    if n < 1 or abs(n * dt - t_end) > 1e-9 * max(1.0, abs(t_end)):
+        raise ValueError(f"t_end（{t_end}）は時間刻み dt（{dt}）の整数倍にしてください")
     rec = {"t": []}
     for k in list(s) + list(model.outputs(0.0, s)):
         rec[k] = []
     stopped = False
 
     def record(t, s):
+        o = model.outputs(t, s)                      # 先に計算する（ここで失敗しても、記録の長さがそろったままになる）
         rec["t"].append(t)
-        for k, v in s.items():
-            rec[k].append(v)
-        for k, v in model.outputs(t, s).items():
+        for k, v in list(s.items()) + list(o.items()):
             rec[k].append(v)
 
     record(t, s)
     for i in range(1, n + 1):
         try:
-            s = model.clamp(step(model, t, s, dt))
-            diverged = any(not np.isfinite(v) for v in s.values())
-        except (ValueError, OverflowError, ZeroDivisionError):      # 計算の途中で負の数の平方根などが出た
-            diverged = True
-        if diverged:
-            err = FloatingPointError(f"t={t:.4g}: 状態量が発散しました（時間刻み dt を小さくしてください。method が 'euler' か 'rk2' なら、'rk4' にすると安定な範囲が広がります）")
-            err.result = {k: np.asarray(v, float) for k, v in rec.items()}     # 発散する直前までの記録
-            raise err
-        t = i * dt
-        if i % record_every == 0:
-            record(t, s)
+            s_new = step(model, t, s, dt)
+            if not all(np.isrealobj(v) and np.all(np.isfinite(v)) for v in s_new.values()):   # clamp() で隠れる前に調べる
+                raise FloatingPointError("状態量が無限大・NaN・複素数になりました")
+            s, t = model.clamp(s_new), i * dt
+            if i % record_every == 0:
+                record(t, s)
+        except (ValueError, OverflowError, ZeroDivisionError, FloatingPointError) as exc:   # 負の数の平方根なども含む
+            err = FloatingPointError(f"t={t:.4g}: 計算を続けられません（{type(exc).__name__}: {exc}）。状態量の発散なら、時間刻み dt を"
+                                     "小さくするか method を 'rk4' に。モデルの式の誤りでも起きるので、元の例外も確かめてください")
+            err.result = {k: np.asarray(v, float) for k, v in rec.items()}     # 止まる直前までの記録
+            raise err from exc
         if stop_when is not None and stop_when(t, s):
             stopped = True
             if i % record_every:
                 record(t, s)
             break
+    if not stopped and n % record_every:             # 最後の状態は必ず記録する
+        record(t, s)
     out = {k: np.asarray(v, float) for k, v in rec.items()}
     out["stopped"] = stopped
     return out

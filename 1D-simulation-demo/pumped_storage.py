@@ -8,13 +8,16 @@
   上池 / 下池      : 0D タンク（体積が状態量）。水位 = 体積 / 面積
   ポンプ水車       : 特性曲線（Q-H, 効率）を Table1D で持つ。動作点は系と連立して求める
   水路             : 損失 = k * Q^2
-  運用ロジック     : 需要スケジュールに従って「発電 / 揚水 / 停止」を切替。揚水は、余った電力でまかなえる台数だけ動かす
+  運用ロジック     : 需要スケジュールに従って「発電 / 揚水 / 停止」を切替。発電は要求をまかなえる最小の台数、
+                     揚水は余った電力で動かせる台数（1台あたり約 450 MW として判定）だけ動かす
   外乱             : 降雨（集水域→流入）、蒸発、需要スパイク
 
 状態量: V_u (上池体積 m3), V_l (下池体積 m3)
-        ほかに積算値として E_gen, E_pump, E_spill, E_short [MWh] と、水車・ポンプを通った水量 W_gen, W_pump [m3]
+        ほかに積算値として E_gen, E_pump, E_spill, E_short [MWh] と、水車・ポンプを通った水量 W_gen, W_pump、
+        上池・下池からあふれた水量 W_spill_u, W_spill_l、雨と蒸発の量 W_rain, W_evap [m3]（水の収支の確認用）
 """
 from __future__ import annotations
+import math
 import numpy as np
 from onedsim import Model, Table1D, bisect
 
@@ -48,7 +51,7 @@ class PumpedStorage(Model):
         self.eta_gen, self.eta_motor = 0.975, 0.975   # 発電機 / 電動機効率
         self.P_unit = 470.0        # MW /台（発電機出力の上限 = 水車の最大出力 482 MW × 発電機効率）
         self.P_pump_nominal = 450.0   # MW /台（揚水 1 台のおおよその入力。余った電力で何台回せるかの判定に使う）
-        self.V_spill = 0.999 * V_max  # 上池がここまで来たら満水（これ以上の流入は越流）
+        self.V_spill = 0.999 * V_max  # 池がここまで来たら満水（上池はこれ以上の流入が越流、下池は下流の川へ放流）
 
     # ---------------- 系の幾何 ----------------
     def head(self, V_u, V_l):
@@ -76,7 +79,7 @@ class PumpedStorage(Model):
     # ---------------- 状態方程式 ----------------
     def initial_state(self):
         return {"V_u": self.V_u0, "V_l": self.V_max - self.V_u0, "E_gen": 0.0, "E_pump": 0.0, "E_spill": 0.0, "E_short": 0.0,
-                "W_gen": 0.0, "W_pump": 0.0}
+                "W_gen": 0.0, "W_pump": 0.0, "W_spill_u": 0.0, "W_spill_l": 0.0, "W_rain": 0.0, "W_evap": 0.0}
 
     def flows(self, t, s):
         V_u, V_l = s["V_u"], s["V_l"]
@@ -84,10 +87,13 @@ class PumpedStorage(Model):
         P_req = self.demand(t)
         Q_t = Q_p = 0.0
         P_gen = P_pump = 0.0
-        if P_req > 0 and V_u > self.V_min:                       # 発電
-            Q_t = self.n * self.turbine_flow(P_req / self.n, H)
-            H_eff = H - self.k_loss * (Q_t / self.n) ** 2
-            P_gen = RHO * G * Q_t * H_eff * self.turb_eta(Q_t / self.n) * self.eta_gen / 1e6
+        if P_req > 0 and V_u > self.V_min:                       # 発電: 要求をまかなえる最小の台数を動かし、その台数で等分する
+            Qm = self.Q_turb_max
+            P_max = min(RHO * G * Qm * (H - self.k_loss * Qm ** 2) * self.turb_eta(Qm) * self.eta_gen / 1e6, self.P_unit)   # この落差での1台の最大出力
+            n_on = min(self.n, math.ceil(P_req / P_max - 1e-9))
+            Q_t = n_on * self.turbine_flow(P_req / n_on, H)
+            H_eff = H - self.k_loss * (Q_t / n_on) ** 2
+            P_gen = RHO * G * Q_t * H_eff * self.turb_eta(Q_t / n_on) * self.eta_gen / 1e6
         elif P_req < 0 and V_u < self.V_spill and V_l > self.V_min and (self.pump_in_rain or self.rain(t) <= 0):  # 揚水
             n_pump = min(self.n, int(-P_req / self.P_pump_nominal + 1e-9))   # 余った電力でまかなえる台数（固定速なので入力は調整できない）
             Q1 = self.pump_operating_point(H)
@@ -104,15 +110,17 @@ class PumpedStorage(Model):
         f = self.flows(t, s)
         dVu = f["Q_p"] - f["Q_t"] + f["Q_rain"] - f["Q_evap"]
         dVl = f["Q_t"] - f["Q_p"] - f["Q_evap"]
-        spill = 0.0
+        spill = spill_l = 0.0
         if s["V_u"] >= self.V_spill and dVu > 0:                   # 上池満水 → 越流（満水では揚水しないので、あふれるのは雨の分だけ）
-            spill = dVu
-            dVu = 0.0
+            spill, dVu = dVu, 0.0
+        if s["V_l"] >= self.V_spill and dVl > 0:                   # 下池満水 → 発電した水を下流の川へ放流
+            spill_l, dVl = dVl, 0.0
         return {"V_u": dVu, "V_l": dVl,
                 "E_gen": f["P_gen"] / 3600, "E_pump": f["P_pump"] / 3600,
                 "E_spill": RHO * G * spill * f["H"] * 0.9 / 3.6e9,        # 越流で失った発電機会 [MWh/s]
                 "E_short": max(f["P_req"] - f["P_gen"], 0.0) / 3600 if f["P_req"] > 0 else 0.0,   # 供給不足 [MWh/s]
-                "W_gen": f["Q_t"], "W_pump": f["Q_p"]}                                           # 水車・ポンプを通った水量 [m3/s]
+                "W_gen": f["Q_t"], "W_pump": f["Q_p"],                                           # 水車・ポンプを通った水量 [m3/s]
+                "W_spill_u": spill, "W_spill_l": spill_l, "W_rain": f["Q_rain"], "W_evap": 2 * f["Q_evap"]}   # 水の収支の確認用 [m3/s]
 
     def clamp(self, s):
         s["V_u"] = min(max(s["V_u"], 0.0), self.V_max)
@@ -145,7 +153,7 @@ def make_demand(peak_MW=900.0, pump_MW=-900.0, heatwave_day=None, heatwave_MW=No
     def d(t):
         base = default_demand(t, peak_MW, pump_MW)
         if heatwave_day is not None and int(t // DAY) == heatwave_day and base > 0:
-            return heatwave_MW if heatwave_MW else base
+            return heatwave_MW if heatwave_MW is not None else base
         if heatwave_day is not None and int(t // DAY) == heatwave_day:
             h = (t % DAY) / 3600
             if 10 <= h < 13 or 16 <= h < 18:      # 猛暑日は昼間ずっと発電要求
@@ -166,6 +174,8 @@ def make_rain(storm_day=None, mm_per_h=30.0, hours=12.0):
 
 def roundtrip(res):
     """往復効率: 水 1 m3 あたりの発電量 ÷ 水 1 m3 あたりの揚水電力量。雨で増えた水や、週の初めと終わりの水位の差に左右されない。"""
+    if res["W_gen"][-1] <= 0 or res["W_pump"][-1] <= 0:
+        raise ValueError("往復効率は、発電と揚水の両方をした期間で計算してください")
     return (res["E_gen"][-1] / res["W_gen"][-1]) / (res["E_pump"][-1] / res["W_pump"][-1])
 
 

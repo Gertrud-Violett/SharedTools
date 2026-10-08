@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from onedsim import simulate          # noqa: E402
-from gg_rocket import GGEngine, crossing_time, design_point   # noqa: E402
+from gg_rocket import P_ATM, GGEngine, crossing_time, design_point   # noqa: E402
 
 trapezoid = getattr(np, "trapezoid", None) or np.trapz   # 台形則の積分。NumPy 2 では trapezoid、1.x では trapz
 
@@ -57,11 +57,12 @@ def base():
     return run(3.0)
 
 
-def test_v3_sequence_still_gives_the_published_v3_numbers():
-    """主弁を 0.3〜0.9 s で開く以前の手順は、以前と同じ結果になる（弁まわりを書き換えても挙動を変えていない確認）"""
+def test_old_start_sequence_regression():
+    """主弁を 0.3〜0.9 s で開く以前の手順の結果が、意図せず変わっていないことの確認（回帰テスト）。
+    値は、GG の中のガスの組成を状態量に加えた版（2026-10）で計算したもの。モデルの式を変えたら、確かめたうえで更新する"""
     r = run(3.0, main_valve_t=(0.30, 0.90))
-    assert r["rpm"].max() == pytest.approx(44957.32067692817, rel=1e-9)
-    assert r["Pd_o_MPa"].max() == pytest.approx(24.67080846011524, rel=1e-9)
+    assert r["rpm"].max() == pytest.approx(44950.100823028275, rel=1e-9)
+    assert r["Pd_o_MPa"].max() == pytest.approx(24.660025968206444, rel=1e-9)
     assert r["t"][np.argmax(r["F_kN"] > 0.9 * r["F_kN"][-1])] == pytest.approx(0.589, abs=1e-9)
 
 
@@ -208,3 +209,26 @@ def test_propellant_mass_is_conserved_through_cutoff():
     drained = (r["m_f"][0] + r["m_o"][0]) - (r["m_f"][-1] + r["m_o"][-1])
     flowed = trapezoid(r["mdot_c"] + r["mdot_gg"], r["t"])
     assert drained == pytest.approx(flowed, rel=1e-3)
+
+
+# ----------------------------------------------------------------------------- 容器の中のガスの質量保存
+def gas_balance(r, key_in, key_out, key_m):
+    """∫(流入 − 流出) dt − 容器の中のガスの質量の変化 [kg]。0 ならガスが湧きも消えもしていない"""
+    return trapezoid(r[key_in] - r[key_out], r["t"]) - (r[key_m][-1] - r[key_m][0])
+
+
+@pytest.mark.parametrize("kw, t_end", [
+    (dict(gg_lox_lag=-0.02), 1.0),                               # 起動: GG の LOX 弁が 20 ms 先に開く（GG の O/F が大きく振れる）
+    (dict(cutoff_t=T_CUT, gg_lox_cut_lag=0.02), T_CUT + 0.4),    # 停止: GG の燃料弁が 20 ms 先に閉じる
+])
+def test_gas_mass_is_conserved_in_both_volumes_when_the_gg_mixture_ratio_swings(kw, t_end):
+    r = run(t_end, record_every=1, **kw)
+    assert abs(gas_balance(r, "mdot_c", "mdot_c_out", "m_gas_c")) < 0.01 * r["m_gas_c"].max()
+    assert abs(gas_balance(r, "mdot_gg", "mdot_t", "m_gas_gg")) < 0.01 * r["m_gas_gg"].max()
+
+
+# ----------------------------------------------------------------------------- 設計計算
+def test_vacuum_thrust_adds_the_back_pressure_on_both_the_nozzle_and_the_turbine_exhaust():
+    """真空では、主ノズルとタービン排気の出口の両方で、大気圧が押し返していた分だけ推力が増える"""
+    assert D["A_exh"] > 0.0
+    assert D["F_vac"] - D["F_sl"] == pytest.approx(P_ATM * (D["A_e"] + D["A_exh"]), rel=1e-12)

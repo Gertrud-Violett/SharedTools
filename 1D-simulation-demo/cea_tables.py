@@ -2,7 +2,7 @@
 cea_tables.py — gg_rocket.py に埋め込んだ「燃焼ガスの特性表」を RocketCEA で作り直すスクリプト（任意）
 RocketCEA（NASA CEA の Python ラッパー）が必要:  pip install rocketcea
   使い方（Windows 編）: https://makkiblog.com/rocketcea_intro/
-出力: 酸燃比 O/F ごとの 断熱火炎温度 T [K]・特性排気速度 c* [m/s]・分子量 M [g/mol]（LOX/RP-1、燃焼圧 9.7 MPa、化学平衡）
+出力: 酸燃比 O/F ごとの 断熱火炎温度 T [K]・特性排気速度 c* [m/s]・分子量 M [g/mol]、真空推力係数 CF_vac（LOX/RP-1、燃焼圧 9.7 MPa、開口比 16、化学平衡）
 """
 from rocketcea.cea_obj import CEA_Obj
 
@@ -25,6 +25,12 @@ if __name__ == "__main__":
     print("T_AD =", [round(r[1]) for r in rows])
     print("CSTAR=", [round(r[2]) for r in rows])
     print("MW   =", [round(r[3], 2) for r in rows])
+    CF_OFS = [1.5, 2.0, 2.2, 2.36, 2.5, 2.8, 3.4]                     # gg_rocket.py の CF_VAC と同じ点
+    cf = []
+    for of in CF_OFS:
+        ivac, cstar_ft, _ = cea.get_IvacCstrTc(Pc=pc, MR=of, eps=EPS)
+        cf.append(round(float(ivac) * 9.80665 / (float(cstar_ft) * 0.3048), 4))   # CF_vac = Isp_vac × g0 ÷ c*
+    print("CF_VAC（O/F", CF_OFS, "）=", cf)
     ivac, cstar_ft, tc_R = cea.get_IvacCstrTc(Pc=pc, MR=2.36, eps=EPS)
     print(f"\n設計点 O/F 2.36: Tc = {tc_R/1.8:.0f} K, c* = {cstar_ft*0.3048:.1f} m/s, 真空推力係数 CF_vac = {ivac*9.80665/(cstar_ft*0.3048):.4f}, 真空比推力 = {ivac:.1f} s")
     # 参考: 燃料過剰の GG を化学平衡で計算すると、実機（O/F 0.32 で約 900 K）より高い温度になる。gg_rocket.py が GG の領域に実測ベースの表を使う理由
