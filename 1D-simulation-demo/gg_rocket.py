@@ -95,9 +95,10 @@ _QN = [0.0, 0.3, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.75]
 PUMP_HEAD = Table1D(_QN, [1.25, 1.24, 1.18, 1.10, 1.00, 0.85, 0.62, 0.30, 0.00], "ポンプ揚程マップ g(Qn)")
 PUMP_POWER = Table1D(_QN, [0.45, 0.60, 0.78, 0.89, 1.00, 1.09, 1.15, 1.18, 1.19], "ポンプ軸動力マップ p(Qn)")   # 締切りでも約45%食う
 
-# --- タービン（衝動タービン）: 効率は速度比 x = (U/C0)/(U/C0)_設計 の放物線。設計点で最大
-_X = [0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
-TURB_MAP = Table1D(_X, [2 * x - x * x for x in _X], "タービン効率マップ η/η_d")
+# --- タービン（衝動タービン）: 効率は速度比 x = (U/C0)/(U/C0)_設計 の放物線 η/η_d = 2x − x²。設計点（x = 1）で最大
+def turbine_eta_ratio(x):
+    """タービン効率マップ η/η_d。粗い表にして直線でつなぐと設計点に角ができるので、式のまま計算する。x ≤ 0 と x ≥ 2 では 0"""
+    return max(x * (2.0 - x), 0.0)
 
 
 # ============================================================================= 設計点（静的なつり合い）
@@ -242,7 +243,7 @@ class GGEngine(Model):
         m_t = crit_flow(gam) * Pgg * self.A_tn / math.sqrt(R_g * Tgg) * unchoke(self.P_exh, Pgg, gam)
         dh = cp * Tgg * (1 - (self.P_exh / Pgg) ** ((gam - 1) / gam)) if Pgg > self.P_exh else 0.0
         x = w * math.sqrt(self.dh / dh) if dh > 0 else 2.0             # 速度比（設計点で 1）
-        eta_t = self.eta_turb * TURB_MAP(x)
+        eta_t = self.eta_turb * turbine_eta_ratio(x)
         W_t = m_t * dh * eta_t
         T_out = Tgg - eta_t * dh / cp
         F_exh = m_t * math.sqrt(2 * cp * T_out * (1 - (P_ATM / self.P_exh) ** ((gam - 1) / gam)))

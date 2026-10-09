@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from onedsim import simulate          # noqa: E402
-from gg_rocket import P_ATM, GGEngine, crossing_time, design_point   # noqa: E402
+from gg_rocket import P_ATM, GGEngine, crossing_time, design_point, turbine_eta_ratio   # noqa: E402
 
 trapezoid = getattr(np, "trapezoid", None) or np.trapz   # 台形則の積分。NumPy 2 では trapezoid、1.x では trapz
 
@@ -51,6 +51,33 @@ def test_crossing_time_is_the_first_sample_when_already_past_the_level():
     assert crossing_time([3.0, 4.0], [5.0, 6.0], 1.0) == 3.0
 
 
+# ----------------------------------------------------------------------------- タービンの効率マップ
+@pytest.mark.parametrize("x", [0.1, 0.6, 0.9, 0.99, 1.01, 1.128, 1.6])
+def test_turbine_efficiency_map_is_the_parabola_at_any_speed_ratio(x):
+    """衝動タービンの効率（設計点との比）は速度比 x の放物線 2x − x²。0.25 刻みの点のあいだでも式どおりの値になる"""
+    assert turbine_eta_ratio(x) == pytest.approx(2 * x - x * x, rel=1e-12)
+
+
+def test_turbine_efficiency_map_has_a_smooth_peak_at_the_design_point():
+    """設計点（x = 1）が頂点。左右対称で、そこで折れ曲がらない（頂点からの落ち方は 2 次）"""
+    d = 1e-3
+    assert turbine_eta_ratio(1.0) == 1.0
+    assert turbine_eta_ratio(1 - d) == pytest.approx(turbine_eta_ratio(1 + d), rel=1e-12)
+    assert 1.0 - turbine_eta_ratio(1 + d) == pytest.approx(d * d, rel=1e-6)
+
+
+def test_turbine_stall_torque_is_twice_the_design_torque():
+    """ガスの流量と熱落差が同じなら、止まっているとき（x → 0）のトルクは設計点の 2 倍（衝動タービンの理論）。
+    トルク ∝ 効率 ÷ 回転数 なので、設計点との比は (η/η_d) / x"""
+    x = 1e-6
+    assert turbine_eta_ratio(x) / x == pytest.approx(2.0, rel=1e-5)
+
+
+def test_turbine_efficiency_map_is_zero_outside_zero_to_twice_the_design_speed_ratio():
+    for x in (-0.5, 0.0, 2.0, 3.0):
+        assert turbine_eta_ratio(x) == 0.0
+
+
 # ----------------------------------------------------------------------------- 起動
 @pytest.fixture(scope="module")
 def base():
@@ -59,11 +86,11 @@ def base():
 
 def test_old_start_sequence_regression():
     """主弁を 0.3〜0.9 s で開く以前の手順の結果が、意図せず変わっていないことの確認（回帰テスト）。
-    値は、GG の中のガスの組成を状態量に加えた版（2026-10）で計算したもの。モデルの式を変えたら、確かめたうえで更新する"""
+    値は、タービンの効率マップを式（放物線）で計算する版（2026-10）で計算したもの。モデルの式を変えたら、確かめたうえで更新する"""
     r = run(3.0, main_valve_t=(0.30, 0.90))
-    assert r["rpm"].max() == pytest.approx(44950.100823028275, rel=1e-9)
-    assert r["Pd_o_MPa"].max() == pytest.approx(24.660025968206444, rel=1e-9)
-    assert r["t"][np.argmax(r["F_kN"] > 0.9 * r["F_kN"][-1])] == pytest.approx(0.589, abs=1e-9)
+    assert r["rpm"].max() == pytest.approx(45369.85021466805, rel=1e-9)
+    assert r["Pd_o_MPa"].max() == pytest.approx(25.14157759599409, rel=1e-9)
+    assert r["t"][np.argmax(r["F_kN"] > 0.9 * r["F_kN"][-1])] == pytest.approx(0.583, abs=1e-9)
 
 
 def test_base_start_settles_at_the_design_point(base):
@@ -92,7 +119,7 @@ def test_base_start_time_to_90_percent_thrust_does_not_depend_on_the_recording_i
     t_coarse = crossing_time(base["t"], base["F_kN"], 0.9 * F_D)
     t_fine = crossing_time(fine["t"], fine["F_kN"], 0.9 * F_D)
     assert t_coarse == pytest.approx(t_fine, abs=2e-5)
-    assert 0.4640 < t_fine < 0.4650
+    assert 0.4605 < t_fine < 0.4615
 
 
 def test_base_start_keeps_gg_temperature_near_design(base):
