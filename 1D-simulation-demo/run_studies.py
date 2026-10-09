@@ -480,10 +480,11 @@ def study_rocket():
 
     # ----- GG の LOX 弁 先行／遅れ
     lags = np.array([-0.04, -0.03, -0.02, -0.015, -0.01, -0.005, 0.0, 0.005, 0.01, 0.02, 0.03, 0.04])
-    Tpk, rpk, hist = [], [], {}
+    Tpk, rpk, Ppk, hist = [], [], [], {}
     for lg in lags:
         rr = simulate(GGEngine(gg_lox_lag=float(lg)), 1.2, 1e-4, record_every=2)
         Tpk.append(float(rr["T_gg_K"].max())); rpk.append(float(rr["rpm"].max()))
+        Ppk.append(float(rr["Pgg_MPa"][int(np.argmax(rr["T_gg_K"]))]))                           # 温度がピークになった時刻の GG の圧力 [MPa]
         if round(lg * 1e3) in (-20, -10, 0, 20):
             hist[round(lg * 1e3)] = rr
     # 起動前に GG に入っている窒素の量を変えた場合（1 気圧で満たした量の 0.5〜2 倍）。LOX 弁が先のときのピークは、この仮定で大きく変わる
@@ -491,7 +492,7 @@ def study_rocket():
     lead_ms = [5, 10, 20]
     T_fill = {fl: [float(simulate(GGEngine(gg_lox_lag=-ms / 1e3, gg_n2_fill=fl), 0.6, 1e-4, record_every=2)["T_gg_K"].max()) for ms in lead_ms] for fl in fills}
     over = lambda rr: float((rr["T_gg_K"] > T_LIM).sum() * (rr["t"][1] - rr["t"][0]) * 1e3)      # 目安の温度を超えている時間 [ms]
-    S["gg_gglag"] = dict(lags_ms=(lags * 1e3).tolist(), T_peak=Tpk, rpm_peak=rpk, n2_fills=fills, n2_lead_ms=lead_ms, T_peak_n2={str(fl): T_fill[fl] for fl in fills},
+    S["gg_gglag"] = dict(lags_ms=(lags * 1e3).tolist(), T_peak=Tpk, rpm_peak=rpk, Pgg_at_T_peak=Ppk, n2_fills=fills, n2_lead_ms=lead_ms, T_peak_n2={str(fl): T_fill[fl] for fl in fills},
                          ms_over_limit={str(k): over(v) for k, v in hist.items()})
     f, ax = chart("GGの弁を開く順番と、GG出口温度の時間変化", "時間 [s]", "GG出口温度 [K]",
                   f"GGの燃料弁は {g0:g}〜{g0 + 0.1:g} s で開く。LOX弁をそれより早く／遅く開けた場合の比較")
@@ -629,7 +630,8 @@ def study_rocket():
         burn = a & (q["mdot_c"] > 30.0)
         return dict(impulse=float(trapezoid(F, tc)), t10=crossing_time(tc, F, 0.1 * 845, rising=False), t1=crossing_time(tc, F, 0.01 * 845, rising=False),
                     rpm_peak=float(q["rpm"][a].max()), Pd_peak=float(max(q["Pd_o_MPa"][a].max(), q["Pd_f_MPa"][a].max())),
-                    T_gg_peak=float(q["T_gg_K"][a].max()), T_c_peak=float(q["T_c_K"][a].max()), OF_max=float(q["OF_mcc"][burn].max()), OF_min=float(q["OF_mcc"][burn].min()))
+                    T_gg_peak=float(q["T_gg_K"][a].max()), Pgg_at_T_peak=float(q["Pgg_MPa"][a][int(np.argmax(q["T_gg_K"][a]))]),   # GG 出口温度のピークと、そのときの GG の圧力 [MPa]
+                    T_c_peak=float(q["T_c_K"][a].max()), OF_max=float(q["OF_mcc"][burn].max()), OF_min=float(q["OF_mcc"][burn].min()))
 
     cb = cut_run()
     CB = cut_metrics(cb)
@@ -645,7 +647,8 @@ def study_rocket():
     CM = cut_metrics(cut_run(main_lox_cut_lag=0.02))          # 主弁で燃料弁が 20 ms 先に閉じた場合
     S["gg_cut"] = dict(t_cut=T_CUT, gg_cut_t=[gc0, gc1], main_cut_t=[mc0, mc1], gg_lox_cut_lag=e0.gg_lox_cut_lag, main_lox_cut_lag=e0.main_lox_cut_lag, base=CB,
                        durs=durs, dur_runs=[cut_metrics(CD[x]) for x in durs], dlys=dlys, dly_runs=[cut_metrics(CG[x]) for x in dlys],
-                       lags_ms=[x * 1e3 for x in clags], lag_T_peak=[cut_metrics(CL[x])["T_gg_peak"] for x in clags], main_fuel_first_20ms=CM)
+                       lags_ms=[x * 1e3 for x in clags], lag_T_peak=[cut_metrics(CL[x])["T_gg_peak"] for x in clags],
+                       lag_Pgg_at_T_peak=[cut_metrics(CL[x])["Pgg_at_T_peak"] for x in clags], main_fuel_first_20ms=CM)
 
     f, ax = chart("停止過渡：主弁を閉じる速さと、推力の下がり方", "停止の指令からの時間 [s]", "推力 [kN]",
                   f"0 s が停止の指令。GGの弁は {gc1 - gc0:g} s で閉じ、主弁を閉じる時間だけを変えた（どちらもLOX弁が {-e0.main_lox_cut_lag * 1e3:.0f} ms 先）。\n力積は、指令のあとに出る推力（海面での値）を時間で積分した値。弁より下流に残った推進剤の分は入っていない")
