@@ -362,6 +362,76 @@ def test_nitrogen_in_the_gg_is_conserved_until_gas_starts_to_leave_through_the_t
     assert np.ptp(r["mi_gg"][m]) < 1e-12
 
 
+def test_gg_temperature_with_nitrogen_left_is_the_constant_pressure_mixing_temperature():
+    """窒素が質量で 30 % 残っている GG（推進剤からできたガスは O/F 3）。混ぜる前後でエンタルピー（質量 × cp × T）の合計が同じになる温度で、
+    質量の割合で平均した温度（2,720.6 K）ではない。O/F 3 のガスは、表の比熱比 1.132・分子量 24.75・燃焼温度 3,758 K"""
+    eng = GGEngine()
+    g = eng.gg_state(dict(m_gg=0.05, mi_gg=0.015, mo_gg=0.02625))
+    cp_p = 1.132 * (8314.46 / 24.75) / 0.132
+    cp, R = 0.7 * cp_p + 0.3 * 1150.0, 0.7 * 8314.46 / 24.75 + 0.3 * 296.8
+    T = (0.7 * cp_p * 3758.0 + 0.3 * 1150.0 * 300.0) / cp
+    assert T == pytest.approx(3252.8, abs=0.1) and T - (0.7 * 3758.0 + 0.3 * 300.0) > 500.0
+    assert g["Y"] == pytest.approx(0.75, rel=1e-12) and g["cp"] == pytest.approx(cp, rel=1e-9) and g["T"] == pytest.approx(T, rel=1e-9)
+    assert g["R"] == pytest.approx(R, rel=1e-9) and g["gam"] == pytest.approx(cp / (cp - R), rel=1e-9)
+    assert g["P"] == pytest.approx(0.05 * R * T / eng.V_gg, rel=1e-9)
+
+
+def test_gg_state_without_nitrogen_at_the_design_mixture_ratio_is_the_design_point():
+    """窒素がなく、中身が設計の O/F なら、設計の温度と圧力になる"""
+    eng = GGEngine()
+    m = D["Pgg"] * eng.V_gg / (D["R_g"] * T_GG_D)
+    g = eng.gg_state(dict(m_gg=m, mi_gg=0.0, mo_gg=m * D["OF_g"] / (1 + D["OF_g"])))
+    assert g["T"] == pytest.approx(T_GG_D, rel=1e-9) and g["P"] == pytest.approx(D["Pgg"], rel=1e-9)
+
+
+@pytest.fixture(scope="module")
+def lox_lead_states():
+    """GG の LOX 弁が 20 ms 先に開く起動。記録した状態量から、各時刻の流量を計算し直す"""
+    eng = GGEngine(gg_lox_lag=-0.02)
+    r = simulate(eng, 1.0, 1e-4, record_every=1)
+    states = ("m_f", "m_o", "omega", "Pc", "Tc", "m_gg", "mo_gg", "mi_gg")
+    flows = [eng.flows(float(t), {k: float(r[k][i]) for k in states}) for i, t in enumerate(r["t"])]
+    return eng, r, {k: np.array([f[k] for f in flows]) for k in ("mf_g", "mo_g", "m_t")}
+
+
+def test_each_kind_of_gas_in_the_gg_is_conserved_when_the_lox_valve_leads(lox_lead_states):
+    """酸化剤からできた分・燃料からできた分・窒素のそれぞれで、∫(流入 − 流出) dt = 中の質量の変化。
+    流出は「中身と同じ組成」。燃料の分は状態量ではない（全体 − 酸化剤 − 窒素）ので、3 本の式と clamp() がかみ合っていないと合わない"""
+    _, r, f = lox_lead_states
+    out = f["m_t"] / r["m_gg"]
+    kinds = {"酸化剤": (f["mo_g"], r["mo_gg"]), "燃料": (f["mf_g"], r["m_gg"] - r["mo_gg"] - r["mi_gg"]), "窒素": (0.0 * out, r["mi_gg"])}
+    for name, (inflow, m) in kinds.items():
+        resid = trapezoid(inflow - out * m, r["t"]) - (m[-1] - m[0])
+        assert abs(resid) < 1e-5, f"{name}: {resid:.3g} kg"
+        assert m.min() > -1e-12, name
+
+
+def test_gg_pressure_temperature_and_mass_satisfy_the_gas_law_at_every_recorded_step(lox_lead_states):
+    """記録された GG の圧力・温度と、3 つの質量から決まるガス定数（質量の割合で平均）が、P V = m R T を満たす"""
+    eng, r, _ = lox_lead_states
+    mp = r["m_gg"] - r["mi_gg"]
+    R_p = np.array([gg_gas(min(float(mo / m), 0.999) if m > 1e-12 else 0.0)[2] for mo, m in zip(r["mo_gg"], mp)])
+    R = (mp * R_p + r["mi_gg"] * 296.8) / r["m_gg"]
+    assert np.max(np.abs(r["Pgg_MPa"] * 1e6 * eng.V_gg / (r["m_gg"] * R * r["T_gg_K"]) - 1.0)) < 1e-9
+
+
+@pytest.mark.parametrize("fill", [0.0, -1.0])
+def test_gg_must_hold_some_gas_before_start(fill):
+    """起動前の GG が空（または負の量）だと、ガスの組成が決まらない。黙って計算を進めずにエラーにする"""
+    with pytest.raises(ValueError, match="gg_n2_fill"):
+        GGEngine(gg_n2_fill=fill)
+
+
+def test_nitrogen_above_the_turbine_exit_pressure_leaks_out_before_the_valves_open():
+    """起動前の窒素を 5 気圧ぶん入れても、タービン出口の圧力（0.2 MPa）より高い分は、弁が開く前にタービンのノズルから抜ける。
+    残るのは 0.2 MPa ぶんで、gg_n2_fill を約 1.97（= 0.2 MPa ÷ 1 気圧）より大きくしても結果は変わらない"""
+    eng = GGEngine(gg_n2_fill=5.0)
+    r = simulate(eng, 0.14, 1e-4, record_every=1)
+    left = eng.P_exh * eng.V_gg / (296.8 * eng.T_init)
+    assert r["mi_gg"][0] == pytest.approx(5.0 * P_ATM * eng.V_gg / (296.8 * eng.T_init), rel=1e-12)
+    assert r["mi_gg"][-1] == pytest.approx(left, rel=2e-3) and r["Pgg_MPa"][-1] * 1e6 == pytest.approx(eng.P_exh, rel=2e-3)
+
+
 # ----------------------------------------------------------------------------- 容器の中のガスの質量保存
 def gas_balance(r, key_in, key_out, key_m):
     """∫(流入 − 流出) dt − 容器の中のガスの質量の変化 [kg]。0 ならガスが湧きも消えもしていない"""
@@ -383,6 +453,14 @@ def test_vacuum_thrust_adds_the_back_pressure_on_both_the_nozzle_and_the_turbine
     """真空では、主ノズルとタービン排気の出口の両方で、大気圧が押し返していた分だけ推力が増える"""
     assert D["A_exh"] > 0.0
     assert D["F_vac"] - D["F_sl"] == pytest.approx(P_ATM * (D["A_e"] + D["A_exh"]), rel=1e-12)
+
+
+def test_design_calculation_refuses_a_chamber_pressure_at_which_the_nozzle_flow_would_separate():
+    """設計計算の推力の式は、流れが出口まで壁に沿っている場合のもの。開口比 16 のまま燃焼圧を約 5.7 MPa より下げると海面ではがれるので、
+    そのまま計算すると、時間積分のモデル（はく離を考える）と推力が食い違う（5 MPa で 845 kN のつもりが 856 kN）。エラーにして知らせる"""
+    with pytest.raises(ValueError, match="はがれ"):
+        design_point(Pc=5e6)
+    assert design_point(Pc=6e6)["F_sl"] == D["F_sl"]
 
 
 # ----------------------------------------------------------------------------- 主ノズル（海面での流れのはく離）
@@ -415,6 +493,48 @@ def test_separated_nozzle_gives_more_thrust_than_the_full_flow_formula(Pc):
 
 def test_main_thrust_is_zero_when_the_chamber_is_at_ambient_pressure():
     assert GGEngine().main_thrust(P_ATM, D["OF_c"]) == 0.0
+
+
+def test_main_thrust_is_zero_instead_of_an_error_below_ambient_pressure():
+    """燃焼圧が大気圧より低いと、はがれる断面の圧力比が 1 を超えて式が計算できない。流れないのだから 0 を返す"""
+    eng = GGEngine()
+    assert eng.main_thrust(0.3 * P_ATM, D["OF_c"]) == 0.0 and eng.main_thrust(0.0, D["OF_c"]) == 0.0
+
+
+@pytest.mark.parametrize("M, pr, eps", [(2.0, 0.127805, 1.6875), (3.0, 0.027224, 4.2346)])
+def test_nozzle_relations_reproduce_the_textbook_isentropic_table(M, pr, eps):
+    """圧縮性流れの教科書の表（比熱比 1.4）: マッハ 2 と 3 の圧力比 P/P0 と面積比 A/A*。
+    そこで切ったノズルの真空推力係数は（運動量 + 圧力）÷（Pc At）= (P/P0)(A/A*)(1 + γM²)。式の符号を取り違えると合わない"""
+    e, cf = gg_rocket.nozzle(pr, 1.4)
+    assert e == pytest.approx(eps, rel=2e-4)
+    assert cf == pytest.approx(pr * eps * (1 + 1.4 * M * M), rel=2e-4)
+
+
+SEPARATED = [(5e6, 1.48140, 0.9626), (3e6, 1.39633, 0.9563), (1e6, 1.16718, 0.9357), (0.5e6, 0.97495, 0.9137), (0.2e6, 0.61755, 0.8616)]
+
+
+@pytest.mark.parametrize("Pc, cf_ref, ratio_ref", SEPARATED)
+def test_separated_thrust_is_the_nozzle_cut_at_the_separation_section_with_ambient_pressure_behind_it(Pc, cf_ref, ratio_ref):
+    """はがれたときの推力 =（はがれる断面で切ったノズルの真空推力）−（大気圧 × その断面の面積）。
+    cf_ref は F ÷（Pc At）、ratio_ref は「大気圧までちょうど膨張させたノズル」の推力に対する比（どちらもレビューで別に計算した値）。
+    はがれる目安が大気圧の 0.4 倍なので、ちょうど膨張させたノズルより推力は小さい"""
+    eng = GGEngine()
+    cf_design = eng.d["eta_cf"] * float(gg_rocket.CF_VAC(D["OF_c"])) / gg_rocket.nozzle(eng.pr_exit)[1]   # 表の推力係数 ÷ 理想気体の式の値
+    cut = lambda pr: cf_design * gg_rocket.nozzle(pr)[1] - P_ATM / Pc * gg_rocket.nozzle(pr)[0]           # 圧力比 pr の断面で切ったノズルの F ÷（Pc At）
+    cf = eng.main_thrust(Pc, D["OF_c"]) / (Pc * eng.A_t)
+    assert cf == pytest.approx(cut(gg_rocket.K_SEP * P_ATM / Pc), rel=1e-12)
+    assert cf == pytest.approx(cf_ref, rel=2e-5)
+    assert cf < cut(P_ATM / Pc) and cf / cut(P_ATM / Pc) == pytest.approx(ratio_ref, abs=2e-4)
+
+
+def test_main_thrust_rises_steadily_with_chamber_pressure_through_the_separation_onset():
+    """燃焼圧を大気圧から 12 MPa まで上げていくと、推力は途中で下がることなく増え続ける（はく離の始まる 5.67 MPa にも段差がない）"""
+    eng = GGEngine()
+    assert 139.0 < 1.0 / eng.pr_exit < 141.0                            # 開口比 16 の圧力比 Pc/Pe（化学平衡計算では 139.8）
+    assert gg_rocket.K_SEP * P_ATM / eng.pr_exit == pytest.approx(5.674e6, rel=1e-3)
+    Pc = np.linspace(1.001 * P_ATM, 12e6, 6001)
+    F = np.array([eng.main_thrust(float(p), D["OF_c"]) for p in Pc])
+    assert np.all(np.diff(F) > 0.0)
 
 
 def test_a_choked_nozzle_still_pushes_during_shutdown(cut):

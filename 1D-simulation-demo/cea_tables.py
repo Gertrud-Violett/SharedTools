@@ -43,3 +43,11 @@ if __name__ == "__main__":
     # 参考: 燃料過剰の GG を化学平衡で計算すると、実機（O/F 0.32 で約 900 K）より高い温度になる。gg_rocket.py が GG の領域に実測ベースの表を使う理由
     print(f"GG（O/F 0.324、{GG_PRESSURE_RATIO * PC_BAR / 10:.2f} MPa）の平衡温度 = {cea.get_Tcomb(Pc=pgg, MR=0.324) / 1.8:.0f} K、"
           f"ノズル出口の圧力比 Pc/Pe（開口比 {EPS:.0f}）= {cea.get_PcOvPe(Pc=pc, MR=2.36, eps=EPS):.1f}、燃焼ガスの音速 = {cea.get_SonicVelocities(Pc=pc, MR=2.36, eps=EPS)[0] * 0.3048:.0f} m/s")
+    # 参考: gg_rocket.py の燃焼温度の表は 9.7 MPa の値だけ。圧力が低いと、高温側は解離が進んで温度が下がる。弁の順番がずれて GG の中が
+    # O/F 3 付近を通るとき、GG の圧力は 1〜4 MPa 程度まで下がっているので、そのときの温度は表の値より低い
+    print("O/F 3.0 の燃焼温度: " + "、".join(f"{p:g} MPa で {cea.get_Tcomb(Pc=p * 10 * PSI_PER_BAR, MR=3.0) / 1.8:.0f} K" for p in (1.0, 2.0, 4.0, PC_BAR / 10)))
+    # 参考: O/F 0.8 以上の GG のガスの比熱は、gg_rocket.py では比熱比とガス定数から cp = γR/(γ − 1) で計算している。平衡計算の比熱は、
+    # 温度が変わるときに反応が進むとみるか（平衡）、組成が変わらないとみるか（凍結）で大きく違い、上の値はそのあいだにある
+    BTU_LBM_R = 4186.8                                                # 比熱の換算 [BTU/lbm/°R] → [J/kg/K]
+    print(f"O/F 3.0・{GG_PRESSURE_RATIO * PC_BAR / 10:.2f} MPa の比熱: 平衡 {cea.get_Chamber_Cp(Pc=pgg, MR=3.0, eps=EPS, frozen=0) * BTU_LBM_R:.0f} J/kg/K、"
+          f"凍結 {cea.get_Chamber_Cp(Pc=pgg, MR=3.0, eps=EPS, frozen=1) * BTU_LBM_R:.0f} J/kg/K")

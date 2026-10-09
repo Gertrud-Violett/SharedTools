@@ -99,6 +99,8 @@ def gg_gas(Y):
         cp = GG_CP(of)
         return cp, gam, cp * (gam - 1) / gam
     R = GG_R(of)                             # それより上: ガス定数と比熱比から（cp = γR/(γ − 1)）
+    # この cp は平衡計算の比熱そのものではない。O/F 3・7.76 MPa では約 2,880 J/kg/K で、平衡計算の値は、温度が変わるときに反応が進むとみるか
+    # 組成が変わらないとみるかで 約 7,070 / 約 1,970 J/kg/K と大きく違う（cea_tables.py）。窒素で薄まったときの温度は、この仮定に左右される
     return gam * R / (gam - 1), gam, R
 
 
@@ -106,7 +108,8 @@ def gg_gas(Y):
 N2_CP, N2_R = 1150.0, 296.8             # [J/kg/K]
 
 # --- 主ノズルの中の膨張（理想気体の等エントロピー流れ）。海面で燃焼圧が下がったときの、流れのはく離の計算に使う
-GAMMA_NOZ = 1.183                       # 膨張を表す比熱比。開口比 16 のときの圧力比 Pc/Pe が、化学平衡計算（CEA）の 139.8 に合う値
+GAMMA_NOZ = 1.183                       # 膨張を表す比熱比。開口比 16 のときの圧力比 Pc/Pe が 140.0 になり、化学平衡計算（CEA）の 139.8 とほぼ合う値
+#                                         （チョークの判定に使う GAMMA_C = 1.15 は燃焼室の中の値で、膨張の途中の平均とは別）
 K_SEP = 0.4                             # 壁の圧力が大気圧のこの倍率まで下がった所で、流れが壁からはがれるとする（Summerfield の目安。0.3〜0.4）
 
 
@@ -165,6 +168,10 @@ def design_point(**kw):
     # 推力から流量とスロート面積を決める
     cstar = d["eta_cstar"] * CSTAR(d["OF_c"])
     cf_vac = d["eta_cf"] * CF_VAC(d["OF_c"])
+    Pc_sep = K_SEP * P_ATM / bisect(lambda pr: nozzle(pr)[0] - d["eps"], 1e-6, 0.5)   # これより低い燃焼圧では、海面でノズルの流れがはがれる
+    if Pc < Pc_sep:
+        raise ValueError(f"燃焼圧 {Pc / 1e6:.2f} MPa では、設計点で主ノズルの流れが壁からはがれます（開口比 {d['eps']:g} では約 {Pc_sep / 1e6:.2f} MPa 以上が必要）。"
+                         "設計計算の推力の式は、流れが出口まで壁に沿っている場合のものです")
     cf_sl = cf_vac - d["eps"] * P_ATM / Pc
     m_c = d["F_sl"] / (cstar * cf_sl + r * v_exh)
     m_g = r * m_c
@@ -214,7 +221,11 @@ class GGEngine(Model):
         assert 0.0 <= gg_cut_t[0] < gg_cut_t[1] and 0.0 <= main_cut_t[0] < main_cut_t[1], "gg_cut_t / main_cut_t は (閉じ始め, 閉じ切り) を 0 ≤ 閉じ始め < 閉じ切り で指定してください"
         self.cutoff_t, self.gg_cut_t, self.main_cut_t = cutoff_t, gg_cut_t, main_cut_t
         self.gg_lox_cut_lag, self.main_lox_cut_lag = gg_lox_cut_lag, main_lox_cut_lag
-        self.T_init, self.gg_n2_fill = T_init, gg_n2_fill        # gg_n2_fill: 起動前に GG に入っている窒素の量（1 気圧で満たした量に対する倍率）
+        if not gg_n2_fill > 0.0:
+            raise ValueError(f"gg_n2_fill（{gg_n2_fill}）は 0 より大きくしてください。起動前の GG が空だと、中のガスの組成と温度が決まりません")
+        # gg_n2_fill: 起動前に GG に入っている窒素の量（1 気圧で満たした量に対する倍率）。タービン出口の圧力（P_exh ÷ 1 気圧 = 約 1.97 倍）を
+        # 超える分は、弁が開く前にタービンのノズルから抜けるので、それより大きくしても結果は変わらない
+        self.T_init, self.gg_n2_fill = T_init, gg_n2_fill
 
     # ---------------- 弁の開度（0〜1） ----------------
     def closing(self, t, cut_t, lag):
@@ -260,6 +271,8 @@ class GGEngine(Model):
         """主ノズルの海面推力 [N]。流れが出口まで壁に沿っていれば F = η CF_vac Pc At − Pa Ae。
         燃焼圧が下がり、出口より手前で壁の圧力が大気圧の K_SEP 倍まで下がると、流れはそこで壁からはがれ、その先の壁には大気圧がかかる。
         このときは、はがれる断面でノズルを切ったものとして計算する（推力係数も、背圧を受ける面積も、その断面までの値になる）"""
+        if Pc <= P_ATM:                                          # 燃焼圧が大気圧以下なら流れない（下の式は圧力比が 1 を超えると計算できない）
+            return 0.0
         eps, cf = self.d["eps"], self.d["eta_cf"] * CF_VAC(of_c)
         pr_sep = K_SEP * P_ATM / Pc                              # はがれる断面の圧力 ÷ 燃焼圧
         if pr_sep > self.pr_exit:
