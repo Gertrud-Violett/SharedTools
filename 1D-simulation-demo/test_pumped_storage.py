@@ -185,9 +185,13 @@ def test_pump_total_head_stays_inside_the_published_range():
     assert 677.0 <= H_p.min() and H_p.max() <= 728.0
 
 
-@pytest.mark.xfail(strict=True, reason="仮定したポンプ曲線は調整していない。上池の水位が低いとき、軸入力が公表の最大 464 MW を 1.4 MW ほど上回る")
-def test_pump_shaft_power_stays_below_the_published_maximum():
-    assert pump_points(PumpedStorage())[:, 2].max() <= 464.0
+def test_pump_shaft_power_is_within_half_a_percent_of_the_published_maximum(week):
+    """公表の最大軸入力は 464 MW（東芝レビュー 2006）。仮定したポンプ曲線は公表値に合わせ込んでいないので、上池の水位が運用の下限に近いときは
+    これを少し上回る（1.4 MW、0.3 %）。記事の 1 週間の運転では、その水位まで下がらないので、464 MW 以内に収まる"""
+    m = PumpedStorage()
+    assert 464.0 < pump_points(m)[:, 2].max() < 464.0 * 1.005
+    units = np.where(week["P_pump"] > 1.5 * m.P_pump_nominal, 2, 1)     # その時刻に揚水している台数（週末は 1 台）
+    assert (week["P_pump"] / units * m.eta_motor).max() <= 464.0        # 1 台あたりの軸入力 = 電動機の入力 × 電動機効率
 
 
 # ----------------------------------------------------------------------------- 運用
