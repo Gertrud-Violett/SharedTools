@@ -193,7 +193,7 @@ class GGEngine(Model):
     def __init__(self, gg_lox_scale=1.0, mcc_lox_scale=1.0, A_gg_orifice_scale=1.0, gg_lox_lag=0.0, main_lox_lag=0.0,
                  gg_valve_t=0.15, main_valve_t=(0.20, 0.50), spin_torque=450.0, spin_time=0.5,
                  cutoff_t=None, gg_cut_t=(0.0, 0.05), main_cut_t=(0.0, 0.15), gg_lox_cut_lag=-0.02, main_lox_cut_lag=-0.02,
-                 eta_turb=None, burn_time=150.0, T_init=300.0, design=None):
+                 eta_turb=None, burn_time=150.0, T_init=300.0, gg_n2_fill=1.0, design=None):
         d = self.d = design or design_point()
         for k in ("A_t", "A_e", "V_c", "V_gg", "A_tn", "J", "P_exh", "P_tank", "omega_d", "dPd_f", "dPd_o", "Qd_f", "Qd_o", "Wd_f", "Wd_o", "dh"):
             setattr(self, k, d[k])
@@ -214,7 +214,7 @@ class GGEngine(Model):
         assert 0.0 <= gg_cut_t[0] < gg_cut_t[1] and 0.0 <= main_cut_t[0] < main_cut_t[1], "gg_cut_t / main_cut_t は (閉じ始め, 閉じ切り) を 0 ≤ 閉じ始め < 閉じ切り で指定してください"
         self.cutoff_t, self.gg_cut_t, self.main_cut_t = cutoff_t, gg_cut_t, main_cut_t
         self.gg_lox_cut_lag, self.main_lox_cut_lag = gg_lox_cut_lag, main_lox_cut_lag
-        self.T_init = T_init
+        self.T_init, self.gg_n2_fill = T_init, gg_n2_fill        # gg_n2_fill: 起動前に GG に入っている窒素の量（1 気圧で満たした量に対する倍率）
 
     # ---------------- 弁の開度（0〜1） ----------------
     def closing(self, t, cut_t, lag):
@@ -304,7 +304,7 @@ class GGEngine(Model):
 
     # ---------------- 状態方程式 ----------------
     def initial_state(self):
-        m_n2 = P_ATM * self.V_gg / (N2_R * self.T_init)          # GG は、起動前は 1 気圧の窒素で満たされている
+        m_n2 = self.gg_n2_fill * P_ATM * self.V_gg / (N2_R * self.T_init)   # GG は、起動前は窒素で満たされている（既定は 1 気圧）
         return {"m_f": self.m_f0, "m_o": self.m_o0, "omega": 50.0, "Pc": P_ATM, "Tc": self.T_init, "m_gg": m_n2, "mo_gg": 0.0, "mi_gg": m_n2}
 
     def gg_state(self, s):

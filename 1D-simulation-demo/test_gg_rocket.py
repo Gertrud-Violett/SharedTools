@@ -345,6 +345,15 @@ def test_nothing_burns_in_the_gg_before_any_fuel_is_admitted():
     assert r["T_gg_K"].max() < 400.0
 
 
+def test_lox_lead_temperature_peak_depends_on_how_much_nitrogen_is_in_the_gg_before_start():
+    """LOX 弁が先に開いたときの温度のピークは、起動前から入っている窒素が多いほど低い（薄まるため）。
+    停止のときは窒素がもう残っていないので、ピークは窒素の量によらない"""
+    start = [simulate(GGEngine(gg_lox_lag=-0.01, gg_n2_fill=x), 0.4, 1e-4, record_every=2)["T_gg_K"].max() for x in (0.5, 1.0, 2.0)]
+    assert start[0] > start[1] + 200.0 and start[1] > start[2] + 200.0
+    stop = [simulate(GGEngine(cutoff_t=T_CUT, gg_lox_cut_lag=0.01, gg_n2_fill=x), T_CUT + 0.2, 1e-4, record_every=2)["T_gg_K"].max() for x in (0.5, 2.0)]
+    assert stop[0] == pytest.approx(stop[1], abs=1.0)
+
+
 def test_nitrogen_in_the_gg_is_conserved_until_gas_starts_to_leave_through_the_turbine():
     """LOX が入り始めても、タービンへガスが流れ出すまでは、起動前から入っていた窒素の量は変わらない"""
     r = simulate(GGEngine(gg_lox_lag=-0.01), 0.16, 1e-4, record_every=1)
