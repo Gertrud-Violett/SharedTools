@@ -259,3 +259,89 @@ def test_vacuum_thrust_adds_the_back_pressure_on_both_the_nozzle_and_the_turbine
     """真空では、主ノズルとタービン排気の出口の両方で、大気圧が押し返していた分だけ推力が増える"""
     assert D["A_exh"] > 0.0
     assert D["F_vac"] - D["F_sl"] == pytest.approx(P_ATM * (D["A_e"] + D["A_exh"]), rel=1e-12)
+
+
+# ----------------------------------------------------------------------------- 容器のモデル（部品の単体テスト）
+def test_chamber_temperature_follows_with_the_gas_mass_divided_by_the_inflow():
+    """τ = 容器の中のガスの質量 ÷ 流入量。定常では流入 = 流出なので、流出で割る誤りは、流入と流出が違う状態でないと見つからない"""
+    P, T, V, R, m_in, m_out, T_target = 5e6, 2000.0, 0.4, 350.0, 80.0, 30.0, 3500.0
+    dP, dT = GGEngine.chamber(P, T, V, R, m_in, m_out, T_target)
+    tau = (P * V / (R * T)) / m_in
+    assert dT == pytest.approx((T_target - T) / tau, rel=1e-12)
+    assert dP == pytest.approx(R * T / V * (m_in - m_out) + P / T * dT, rel=1e-12)
+
+
+# ----------------------------------------------------------------------------- 時間刻みと安定性（記事 4 ページ目）
+STATES_6 = ["omega", "Pc", "Pgg", "Tc", "Tgg", "Ygg"]            # タンクの残量を除く状態量
+
+
+@pytest.fixture(scope="module")
+def eigenvalues():
+    """定常点のまわりで線形化した状態方程式の固有値（中心差分。run_studies.py と同じ求め方）"""
+    eng = GGEngine()
+    r = simulate(eng, 2.0, 5e-4, record_every=4)
+    s_ss = {k: float(r[k][-1]) for k in ("m_f", "m_o", *STATES_6)}
+
+    def rhs(v):
+        d = eng.derivatives(3.0, dict(s_ss, **dict(zip(STATES_6, v))))
+        return np.array([d[k] for k in STATES_6])
+    x0 = np.array([s_ss[k] for k in STATES_6])
+    assert np.max(np.abs(rhs(x0)) / np.abs(x0)) < 1e-3, "定常に達していない"
+    J = np.zeros((6, 6))
+    for j in range(6):
+        h = x0[j] * 1e-5
+        xp, xm = x0.copy(), x0.copy()
+        xp[j] += h
+        xm[j] -= h
+        J[:, j] = (rhs(xp) - rhs(xm)) / (2 * h)
+    return np.linalg.eigvals(J)
+
+
+def test_steady_state_eigenvalues_are_real_and_negative(eigenvalues):
+    """「安定に解ける条件」の式は、固有値が負の実数であることを前提にしている"""
+    assert np.max(np.abs(eigenvalues.imag)) < 1e-6 * np.max(np.abs(eigenvalues.real))
+    assert np.all(eigenvalues.real < 0)
+
+
+def test_fastest_eigenvalue_is_about_minus_1170_per_second(eigenvalues):
+    assert eigenvalues.real.min() == pytest.approx(-1166.0, rel=0.02)
+
+
+def pc_error(method, dt, t_end, ref):
+    """燃焼圧の、基準の計算（4段・0.2 ms）からのずれの最大値 [MPa]"""
+    q = simulate(GGEngine(), t_end, dt, method=method)
+    return float(np.max(np.abs(q["Pc_MPa"] - np.interp(q["t"], ref["t"], ref["Pc_MPa"]))))
+
+
+@pytest.fixture(scope="module")
+def ref_start():
+    return simulate(GGEngine(), 0.7, 2e-4, method="rk4")
+
+
+def test_euler_is_stable_at_1_7_ms_and_diverges_at_2_0_ms(ref_start):
+    """Δt·|λ| ≤ 2 → Δt ≤ 1.7 ms。燃焼圧が立ち上がる 0.2〜0.5 秒を含む短い計算で確かめる"""
+    assert pc_error("euler", 1.7e-3, 0.68, ref_start) < 0.2          # 限界の手前: 誤差は大きめだが発散しない
+    assert pc_error("euler", 2.0e-3, 0.60, ref_start) > 1.0          # 限界の外: 燃焼圧が 1 MPa 以上ずれる
+
+
+def test_rk4_is_still_accurate_at_2_0_ms(ref_start):
+    assert pc_error("rk4", 2.0e-3, 0.60, ref_start) < 0.02
+
+
+def start_outputs(dt):
+    r = simulate(GGEngine(), 1.0, dt, record_every=round(2e-4 / dt))    # 記録の間隔は 0.2 ms にそろえる
+    return dict(rpm_peak=float(r["rpm"].max()), Pd_o_peak=float(r["Pd_o_MPa"].max()), Pd_f_peak=float(r["Pd_f_MPa"].max()),
+                Pc_peak=float(r["Pc_MPa"].max()), Tgg_peak=float(r["T_gg_K"].max()), t90=crossing_time(r["t"], r["F_kN"], 0.9 * F_D))
+
+
+@pytest.fixture(scope="module")
+def halved():
+    return start_outputs(2e-4), start_outputs(1e-4)
+
+
+# 許容値は、実際の差（ピークの値で 2〜3×10⁻⁵、GG の温度で 3×10⁻⁸、90 % 到達時刻で 1×10⁻⁶）の 3 倍以上
+@pytest.mark.parametrize("key, rel", [("rpm_peak", 1e-4), ("Pd_o_peak", 1e-4), ("Pd_f_peak", 1e-4), ("Pc_peak", 1e-4), ("Tgg_peak", 1e-6), ("t90", 1e-5)])
+def test_start_transient_results_do_not_change_when_dt_is_halved(halved, key, rel):
+    """記事の起動の計算（Δt = 0.2 ms）の結果は、Δt を半分にしても変わらない"""
+    coarse, fine = halved
+    assert coarse[key] == pytest.approx(fine[key], rel=rel)

@@ -32,8 +32,8 @@ class Table1D:
         self.x = np.asarray(x, float)
         self.y = np.asarray(y, float)
         self.name = name
-        if self.x.ndim != 1 or self.x.shape != self.y.shape or not np.all(np.isfinite(self.x) & np.isfinite(self.y)) or np.any(np.diff(self.x) <= 0):
-            raise ValueError(f"Table1D {name}: x と y は同じ長さの有限の値で、x は単調増加で与えてください")
+        if self.x.ndim != 1 or self.x.size < 1 or self.x.shape != self.y.shape or not np.all(np.isfinite(self.x) & np.isfinite(self.y)) or np.any(np.diff(self.x) <= 0):
+            raise ValueError(f"Table1D {name}: x と y は同じ長さ（1点以上）の有限の値で、x は単調増加で与えてください")
         self._x, self._y = self.x.tolist(), self.y.tolist()
 
     def __call__(self, xq):
@@ -43,7 +43,7 @@ class Table1D:
                 return y[0]
             if xq >= x[-1]:
                 return y[-1]
-            i = bisect_right(x, xq)
+            i = min(bisect_right(x, xq), len(x) - 1)     # xq が NaN のときは最後の区間の式に入り、NaN がそのまま返る（np.interp と同じ）
             return y[i - 1] + (y[i] - y[i - 1]) * (xq - x[i - 1]) / (x[i] - x[i - 1])
         return np.interp(xq, self.x, self.y)         # 配列はまとめて補間
 
@@ -52,12 +52,12 @@ def bisect(f, a, b, n=40):
     """二分法: f(a) と f(b) の符号が違うとき、f(x)=0 になる x を返す。
     ポンプ曲線と配管抵抗の交点（動作点）のような「部品どうしのつり合い」を解くのに使う。"""
     fa, fb = f(a), f(b)
-    if not fa * fb <= 0:                         # 解をはさんでいない（端でちょうど 0 になるのはよい）
+    if not (fa <= 0 <= fb or fb <= 0 <= fa):     # 解をはさんでいない（端でちょうど 0 になるのはよい）。NaN もここで止まる
         raise ValueError(f"bisect: f({a:g}) と f({b:g}) が同じ符号です。解をはさむ区間を与えてください")
     for _ in range(n):
         m = 0.5 * (a + b)
         fm = f(m)
-        if fa * fm <= 0:
+        if fa <= 0 <= fm or fm <= 0 <= fa:       # 符号で比べる（積 fa*fm だと、値がごく小さいときに 0 に丸まって判定を誤る）
             b = m
         else:
             a, fa = m, fm
@@ -121,11 +121,12 @@ def simulate(model: Model, t_end: float, dt: float, method: str = "rk4",
     s = dict(model.initial_state())
     t = 0.0
     n = int(round(t_end / dt))
-    if n < 1 or abs(n * dt - t_end) > 1e-9 * max(1.0, abs(t_end)):
-        raise ValueError(f"t_end（{t_end}）は時間刻み dt（{dt}）の整数倍にしてください")
-    rec = {"t": []}
-    for k in list(s) + list(model.outputs(0.0, s)):
-        rec[k] = []
+    if n < 1 or abs(n * dt - t_end) > 1e-9 * max(1.0, abs(t_end)) or record_every < 1:
+        raise ValueError(f"t_end（{t_end}）は時間刻み dt（{dt}）の整数倍に、record_every（{record_every}）は 1 以上にしてください")
+    keys = ["t"] + list(s) + list(model.outputs(0.0, s))
+    if len(set(keys)) < len(keys):
+        raise ValueError(f"状態量と outputs() に同じ名前があります（t も使えません）: {keys}")
+    rec = {k: [] for k in keys}
     stopped = False
 
     def record(t, s):
@@ -135,6 +136,8 @@ def simulate(model: Model, t_end: float, dt: float, method: str = "rk4",
             rec[k].append(v)
 
     record(t, s)
+    if stop_when is not None and stop_when(t, s):    # 最初から打ち切りの条件を満たしているときは、1 ステップも進めない
+        stopped, n = True, 0
     for i in range(1, n + 1):
         try:
             s_new = step(model, t, s, dt)
@@ -166,8 +169,6 @@ def sweep(make_model, param_name: str, values, t_end, dt, metric, **sim_kw):
     make_model(**{param_name: v}) でモデルを作り、metric(res) -> float を values ごとに評価。
     戻り値: (values, metrics) の numpy 配列。
     """
-    ms = []
-    for v in values:
-        res = simulate(make_model(**{param_name: v}), t_end, dt, **sim_kw)
-        ms.append(metric(res))
+    values = list(values)                            # ジェネレータで渡されても、計算と戻り値の両方に使えるように
+    ms = [metric(simulate(make_model(**{param_name: v}), t_end, dt, **sim_kw)) for v in values]
     return np.asarray(values, float), np.asarray(ms, float)
