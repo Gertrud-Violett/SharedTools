@@ -141,6 +141,18 @@ def test_bisect_rejects_a_function_that_returns_nan():
         bisect(lambda x: float("nan"), 0.0, 1.0)
 
 
+def test_bisect_rejects_a_nan_that_appears_only_inside_the_interval():
+    """両端では値が出るのに、途中で NaN になる関数。黙って上端の近くを返さず、エラーにする"""
+    with pytest.raises(ValueError, match="NaN"):
+        bisect(lambda x: float("nan") if 0.2 < x < 0.9 else x - 0.5, 0.0, 1.0)
+
+
+def test_table1d_with_a_single_point_is_a_constant_like_numpy_even_for_nan():
+    t = Table1D([2.0], [7.0])
+    assert t(1.0) == t(2.0) == t(3.0) == 7.0
+    assert t(float("nan")) == float(np.interp(float("nan"), [2.0], [7.0]))
+
+
 def test_bisect_stays_at_the_lower_end_when_the_function_is_zero_there():
     """下端でちょうど 0（例: 弁が全部閉じているときのポンプの流量）なら、中の点の符号がどちらでも下端を返す"""
     assert bisect(lambda x: x, 0.0, 1.0) == pytest.approx(0.0, abs=1e-9)

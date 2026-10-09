@@ -39,7 +39,7 @@ class Table1D:
     def __call__(self, xq):
         if isinstance(xq, float):                    # 数値1個のときは自前で補間（numpy を通すより数倍速い）
             x, y = self._x, self._y
-            if xq <= x[0]:
+            if xq <= x[0] or len(x) == 1:            # 1点だけの表は定数
                 return y[0]
             if xq >= x[-1]:
                 return y[-1]
@@ -57,10 +57,10 @@ def bisect(f, a, b, n=40):
     for _ in range(n):
         m = 0.5 * (a + b)
         fm = f(m)
-        if fa <= 0 <= fm or fm <= 0 <= fa:       # 符号で比べる（積 fa*fm だと、値がごく小さいときに 0 に丸まって判定を誤る）
-            b = m
-        else:
-            a, fa = m, fm
+        if fm != fm:                             # 区間の途中で NaN になった。黙って端の値を返さない
+            raise ValueError(f"bisect: f({m:g}) が NaN です")
+        # 符号で比べる（積 fa*fm だと、値がごく小さいときに 0 に丸まって判定を誤る）
+        a, b, fa = (a, m, fa) if (fa <= 0 <= fm or fm <= 0 <= fa) else (m, b, fm)
     return 0.5 * (a + b)
 
 
