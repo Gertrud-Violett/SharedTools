@@ -157,7 +157,7 @@ def study_pumped():
     hot = gen & (d >= 2) & (d < 3)
     S["ps_base"] = dict(E_gen=r["E_gen"][-1], E_pump=r["E_pump"][-1], E_spill=r["E_spill"][-1], E_short=r["E_short"][-1],
                         roundtrip=roundtrip(r), level_min=r["level_u"].min(), level_max=r["level_u"].max(),
-                        level_full=m.V_max / m.A, level_low=m.V_min / m.A,
+                        level_full=m.V_max / m.A_u, level_low=m.V_min / m.A_u,   # 水位は最低水位からの高さ [m]
                         H_min=r["H"].min(), H_max=r["H"].max(), Qp_max=r["Q_p"].max(), Qp_min=r["Q_p"][r["Q_p"] > 1].min(), Qt_max=r["Q_t"].max(),
                         P_pump_max=r["P_pump"][two].max(), P_pump_min=r["P_pump"][two].min(), P_pump_1unit_max=r["P_pump"][(r["P_pump"] > 1) & ~two].max(),
                         P_gen_max=r["P_gen"].max(), P_gen_hot_min=r["P_gen"][hot].min(), P_gen_hot_max=r["P_gen"][hot].max(),
@@ -174,8 +174,9 @@ def study_pumped():
     b["level_sat_max"], b["rain_volume"] = float(r["level_u"][(d >= 5) & (d < 6)].max()), float(r["W_rain"][-1])   # 豪雨の土曜の最高水位、降った雨の流入量 [m3]
     Qm = m.Q_turb_max
     b["H_rated"] = m.P_unit * 1e6 / (RHO * G * Qm * m.turb_eta(Qm) * m.eta_gen) + m.k_loss * Qm ** 2   # 1台で定格出力を出すのに要る落差 [m]
+    b["H_half"] = m.head(0.5 * m.V_max, 0.5 * m.V_max)                               # 両池とも有効貯水量の半分のときの落差 [m]
     b["Q_op_Hmin"], b["Q_op_Hmax"], b["Q_op_Hbase"] = (m.pump_operating_point(float(round(b["H_min"]))), m.pump_operating_point(float(round(b["H_max"]))),
-                                                     m.pump_operating_point(m.H_base))      # 図と本文に書く動作点（落差は m 単位に丸めた値で計算）
+                                                     m.pump_operating_point(b["H_half"]))   # 図と本文に書く動作点（落差は m 単位に丸めた値で計算。Q_op_Hbase は両池が半分のとき）
     shade = lambda ax: (ax.axvspan(2, 3, color=STAR, alpha=0.13, lw=0), ax.axvspan(5, 7, color="#dcdfe6", alpha=0.45, lw=0))
     days = ["月", "火", "水", "木", "金", "土", "日"]
 
