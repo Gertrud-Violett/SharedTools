@@ -10,7 +10,8 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from onedsim import simulate          # noqa: E402
-from gg_rocket import P_ATM, T_AD, GGEngine, crossing_time, design_point, turbine_eta_ratio   # noqa: E402
+import gg_rocket                      # noqa: E402
+from gg_rocket import P_ATM, T_AD, GGEngine, crossing_time, design_point, gg_gas, turbine_eta_ratio   # noqa: E402
 
 trapezoid = getattr(np, "trapezoid", None) or np.trapz   # 台形則の積分。NumPy 2 では trapezoid、1.x では trapz
 
@@ -49,6 +50,51 @@ def test_crossing_time_is_none_when_the_level_is_never_reached():
 
 def test_crossing_time_is_the_first_sample_when_already_past_the_level():
     assert crossing_time([3.0, 4.0], [5.0, 6.0], 1.0) == 3.0
+
+
+# ----------------------------------------------------------------------------- 燃焼ガスの表
+def test_gg_gas_properties_inside_the_textbook_table_are_the_textbook_values():
+    """Huzel & Huang の表の行（O/F 0.408: cp 0.653 Btu/lb·°F = 2,734 J/kg/K、比熱比 1.124）"""
+    cp, gam, R = gg_gas(0.408 / 1.408)
+    assert cp == pytest.approx(2734.0, abs=0.5) and gam == pytest.approx(1.124, abs=1e-4)
+    assert R == pytest.approx(cp * (gam - 1) / gam, rel=1e-12)
+
+
+def test_gg_gas_properties_beyond_the_textbook_table_follow_the_equilibrium_values():
+    """教科書の表より上の O/F では、端の値のままにせず、化学平衡計算の分子量と比熱比を使う（O/F 3 で分子量 24.75、比熱比 1.132）"""
+    cp, gam, R = gg_gas(3.0 / 4.0)
+    assert R == pytest.approx(8314.46 / 24.75, rel=1e-6) and gam == pytest.approx(1.132, abs=1e-6)
+    assert cp == pytest.approx(gam * R / (gam - 1), rel=1e-12)
+
+
+def test_gg_gas_at_the_oxygen_end_is_nearly_oxygen():
+    """ほとんど酸素だけのガスのガス定数は、酸素の値（8314.46 ÷ 32.0 = 259.8 J/kg/K）に近い"""
+    cp, gam, R = gg_gas(0.99)
+    assert R == pytest.approx(8314.46 / 31.999, rel=0.01) and gam > 1.25
+
+
+def test_gg_gas_properties_are_continuous_at_the_end_of_the_textbook_table():
+    lo, hi = gg_gas(0.516 / 1.516 - 1e-9), gg_gas(0.516 / 1.516 + 1e-9)
+    assert hi == pytest.approx(lo, rel=1e-6)
+
+
+def test_embedded_combustion_tables_match_rocketcea():
+    """RocketCEA が入っている環境でだけ実行する（なければスキップ）。gg_rocket.py に埋め込んだ表が、化学平衡計算の結果と丸めの範囲で一致する"""
+    cea_obj = pytest.importorskip("rocketcea.cea_obj")
+    import cea_tables
+    cea = cea_obj.CEA_Obj(oxName="LOX", fuelName="RP-1")
+    pc = cea_tables.PC_BAR * cea_tables.PSI_PER_BAR
+    assert cea_tables.OFS == gg_rocket._OF_CEA
+    for of in cea_tables.OFS:
+        ivac, cstar_ft, tc_R = cea.get_IvacCstrTc(Pc=pc, MR=of, eps=cea_tables.EPS)
+        assert float(T_AD(float(of))) == pytest.approx(tc_R / 1.8, abs=0.51)
+        assert float(gg_rocket.CSTAR(float(of))) == pytest.approx(cstar_ft * 0.3048, abs=0.51)
+        mw, gam = cea.get_Chamber_MolWt_gamma(Pc=cea_tables.GG_PRESSURE_RATIO * pc, MR=of, eps=cea_tables.EPS)
+        assert float(gg_rocket.GG_R(float(of))) == pytest.approx(8314.46 / mw, rel=5e-4)
+        assert float(gg_rocket.GG_GAMMA(float(of))) == pytest.approx(gam, abs=5.1e-4)
+    for of, cf in zip(gg_rocket.CF_VAC.x, gg_rocket.CF_VAC.y):
+        ivac, cstar_ft, _ = cea.get_IvacCstrTc(Pc=pc, MR=float(of), eps=cea_tables.EPS)
+        assert cf == pytest.approx(ivac * 9.80665 / (cstar_ft * 0.3048), abs=5.1e-4)
 
 
 # ----------------------------------------------------------------------------- タービンの効率マップ
