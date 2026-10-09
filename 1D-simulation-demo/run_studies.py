@@ -326,8 +326,9 @@ def study_pumped():
     ax.set_xlim(570, 1230); ax.set_ylim(0, top); commas(ax, "x")
     save(f, "1dcae2_07_ps_demand_short_v6.png")
 
-    f, ax = chart("ピーク時の発電要求と上池の最低水位（2台運転）", "ピーク時の発電要求 [MW]", "上池の最低水位 [m]",
-                  "要求を上げても、ある点から水位は下がらなくなる。\n設備の上限（出力・流量）で運転していて、それ以上は水を使えないため")
+    f, ax = chart("ピーク時の発電要求と、上池の水位の最低値（2台運転）", "ピーク時の発電要求 [MW]", "1週間の上池の水位の最低値 [m]",
+                  "要求を上げても、ある点から水位は下がらなくなる（設備の上限で運転していて、それ以上は水を使えないため）。\n"
+                  f"水位は、池の最低水位（標高 {m.z_u_low:,.0f} m）から測った高さ")
     ax.plot(peaks, lvmin, "o-", color=LINK, lw=2.8, ms=5)
     ax.axhline(b["level_low"], color=PINK, ls="--", lw=1.8); label(ax, 585, b["level_low"] + 0.35, f"下限 {b['level_low']:.2f} m", color="#c0569a", ha="left", va="bottom")
     label(ax, 1090, lvmin[-1] + 1.0, f"{lvmin[-1]:.1f} m で下げ止まり", ha="center", va="bottom")
