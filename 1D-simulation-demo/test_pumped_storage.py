@@ -138,6 +138,38 @@ def test_each_pond_evaporates_from_its_own_area_and_only_the_upper_pond_collects
     assert d["W_rain"] == pytest.approx(rain, rel=1e-12)
 
 
+# 池の範囲（0〜V_max）の端で、clamp() が水を作ったり消したりしないこと（7 日間、独立レビューの再現ケース）
+@pytest.mark.parametrize("kw, dt", [
+    (dict(V_u0_frac=0.0, demand=lambda t: 0.0), 60.0),                          # 空の上池から蒸発を数えない
+    (dict(V_u0_frac=1.0, rain=lambda t: 30.0, demand=lambda t: 0.0), 60.0),     # 空の下池から蒸発を数えない
+    (dict(rain=lambda t: 50.0, demand=lambda t: -900.0), 300.0),                # 1 ステップで V_u が V_max を越えても、越えた分を数える
+])
+def test_water_balance_holds_when_a_pond_hits_its_limit(kw, dt):
+    m = PumpedStorage(**kw)
+    r = simulate(m, 7 * DAY, dt, record_every=1)
+    assert abs(water_balance_error(r)) < 1e-4          # 丸め誤差の積み重ね（池の水量 1e7 m3 の桁で 1e-6〜1e-5 m3）より上、バグ（1e3〜1e4 m3）よりずっと下
+    assert r["V_u"].min() >= 0.0 and r["V_l"].min() >= 0.0
+    assert r["V_u"].max() <= m.V_max and r["V_l"].max() <= m.V_max
+
+
+def test_water_pushed_past_a_full_pond_in_one_step_is_counted_as_spill():
+    m = PumpedStorage()
+    s = state(m, V + 5000.0, V - 5000.0)
+    c = m.clamp(dict(s))
+    assert c["V_u"] == V and c["W_spill_u"] == pytest.approx(5000.0, abs=1e-9)
+    assert c["E_spill"] == pytest.approx(5000.0 * chain_J_per_m3(m, m.head(V, V - 5000.0), m.Q_turb_max) / 3.6e9, rel=1e-12)
+    c = m.clamp(dict(state(m, V - 5000.0, V + 5000.0)))          # 下池: 越えた分は下流への放流として数える（発電機会の換算はしない）
+    assert c["V_l"] == V and c["W_spill_l"] == pytest.approx(5000.0, abs=1e-9) and c["E_spill"] == 0.0
+
+
+def test_evaporation_an_empty_pond_could_not_supply_is_taken_back_out_of_the_count():
+    m = PumpedStorage()
+    s = state(m, -30.0, V / 2)
+    s["W_evap"] = 100.0
+    c = m.clamp(s)
+    assert c["V_u"] == 0.0 and c["W_evap"] == pytest.approx(70.0, abs=1e-12)
+
+
 # ----------------------------------------------------------------------------- 越流で失った電力量、発電可能量
 @pytest.mark.parametrize("V_l", [0.05 * V, 0.5 * V, 0.9 * V])
 def test_spilled_energy_per_m3_is_the_generating_chain_at_maximum_flow(V_l):

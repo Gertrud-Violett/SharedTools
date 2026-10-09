@@ -162,8 +162,19 @@ class PumpedStorage(Model):
                 "W_spill_u": spill, "W_spill_l": spill_l, "W_rain": f["Q_rain"], "W_evap": f["Q_evap_u"] + f["Q_evap_l"]}   # 水の収支の確認用 [m3/s]
 
     def clamp(self, s):
-        s["V_u"] = min(max(s["V_u"], 0.0), self.V_max)
-        s["V_l"] = min(max(s["V_l"], 0.0), self.V_max)
+        # 1ステップで池の範囲（0〜V_max）を越えた分も、水の収支に入れる（水が湧いたり消えたりしない）。
+        #   上に越えた分は越流（上池は発電機会 E_spill も）、下に越えた分は「空の池から蒸発できなかった分」として W_evap から引く。
+        #   積分の途中の段には呼ばれず、採用したステップの終わりに 1 回だけ呼ばれる（onedsim.simulate）。
+        over = {V: s[V] - self.V_max for V in ("V_u", "V_l") if s[V] > self.V_max}
+        for V, W in (("V_u", "W_spill_u"), ("V_l", "W_spill_l")):
+            if V in over:
+                s[W] += over[V]
+                s[V] = self.V_max
+            elif s[V] < 0.0:
+                s["W_evap"] += s[V]
+                s[V] = 0.0
+        if "V_u" in over:
+            s["E_spill"] += over["V_u"] * self.energy_per_m3(self.head(s["V_u"], s["V_l"])) / 3.6e9
         return s
 
     def outputs(self, t, s):
