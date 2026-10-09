@@ -226,6 +226,17 @@ def study_pumped():
     if abs(sens["E_short"][1] - b["E_short"]) > 1e-9 or abs(sens["roundtrip"][1] - b["roundtrip"]) > 1e-12:
         raise RuntimeError("損失の感度の中央のケースが、基準の週と一致しません")
     S["ps_loss_sens"] = sens
+
+    # --- 公表の有効落差の両端（最高 675 m / 最低 617 m）に合わせた損失で、同じ基準の週を計算する。損失は 85 m3/s のときの値（公表資料は流量・台数を書いていない。推定）
+    pub = dict(Heff_pub=[675.0, 617.0], loss=[b["H_geo_max"] - 675.0, b["H_geo_min"] - 617.0],
+               Heff_model=[b["H_geo_max"] - b["loss_rated"], b["H_geo_min"] - b["loss_rated"]],   # 基準のモデルの、85 m3/s のときの有効落差の範囲
+               k_loss=[], E_short=[], roundtrip=[], level_min=[])
+    for loss in pub["loss"]:
+        mp = PumpedStorage(k_loss=loss / Qm ** 2, rain=make_rain(storm_day=5), demand=make_demand(heatwave_day=2, heatwave_MW=HOT_MW))
+        rp = simulate(mp, 7 * DAY, 60.0, record_every=5)
+        for k, v in dict(k_loss=mp.k_loss, E_short=rp["E_short"][-1], roundtrip=roundtrip(rp), level_min=rp["level_u"].min()).items():
+            pub[k].append(float(v))
+    S["ps_loss_pub"] = pub
     shade = lambda ax: (ax.axvspan(2, 3, color=STAR, alpha=0.13, lw=0), ax.axvspan(5, 7, color="#dcdfe6", alpha=0.45, lw=0))
     days = ["月", "火", "水", "木", "金", "土", "日"]
 
