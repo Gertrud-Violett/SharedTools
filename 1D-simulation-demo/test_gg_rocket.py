@@ -10,7 +10,7 @@ import pytest
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from onedsim import simulate          # noqa: E402
-from gg_rocket import P_ATM, GGEngine, crossing_time, design_point, turbine_eta_ratio   # noqa: E402
+from gg_rocket import P_ATM, T_AD, GGEngine, crossing_time, design_point, turbine_eta_ratio   # noqa: E402
 
 trapezoid = getattr(np, "trapezoid", None) or np.trapz   # 台形則の積分。NumPy 2 では trapezoid、1.x では trapz
 
@@ -86,10 +86,10 @@ def base():
 
 def test_old_start_sequence_regression():
     """主弁を 0.3〜0.9 s で開く以前の手順の結果が、意図せず変わっていないことの確認（回帰テスト）。
-    値は、タービンの効率マップを式（放物線）で計算する版（2026-10）で計算したもの。モデルの式を変えたら、確かめたうえで更新する"""
+    値は、GG の温度を中身の O/F で決める版（2026-10）で計算したもの。モデルの式を変えたら、確かめたうえで更新する"""
     r = run(3.0, main_valve_t=(0.30, 0.90))
-    assert r["rpm"].max() == pytest.approx(45369.85021466805, rel=1e-9)
-    assert r["Pd_o_MPa"].max() == pytest.approx(25.14157759599409, rel=1e-9)
+    assert r["rpm"].max() == pytest.approx(45379.623761775285, rel=1e-9)
+    assert r["Pd_o_MPa"].max() == pytest.approx(25.15486482883821, rel=1e-9)
     assert r["t"][np.argmax(r["F_kN"] > 0.9 * r["F_kN"][-1])] == pytest.approx(0.583, abs=1e-9)
 
 
@@ -97,6 +97,8 @@ def test_base_start_settles_at_the_design_point(base):
     assert base["F_kN"][-1] == pytest.approx(F_D, abs=0.01)
     assert base["rpm"][-1] == pytest.approx(RPM_D, abs=1.0)
     assert base["Pc_MPa"][-1] == pytest.approx(PC_D, abs=1e-4)
+    assert base["Pgg_MPa"][-1] == pytest.approx(D["Pgg"] / 1e6, abs=1e-4)
+    assert base["T_gg_K"][-1] == pytest.approx(T_GG_D, abs=0.01)
 
 
 def test_base_start_speed_overshoot_is_within_3_percent(base):
@@ -238,6 +240,52 @@ def test_propellant_mass_is_conserved_through_cutoff():
     assert drained == pytest.approx(flowed, rel=1e-3)
 
 
+# ----------------------------------------------------------------------------- GG の中のガスの温度（中身の O/F で決まる）
+@pytest.fixture(scope="module")
+def cut_fuel_first():
+    """GG の燃料弁が LOX 弁より 10 ms 先に閉じる停止"""
+    return simulate(GGEngine(cutoff_t=T_CUT, gg_lox_cut_lag=0.01), T_CUT + 0.2, 1e-4, record_every=1)
+
+
+def test_gg_starts_filled_with_nitrogen_at_ambient_pressure_and_temperature():
+    eng = GGEngine()
+    r = simulate(eng, 0.01, 1e-4, record_every=1)
+    assert r["Pgg_MPa"][0] == pytest.approx(P_ATM / 1e6, rel=1e-12) and r["T_gg_K"][0] == pytest.approx(eng.T_init, rel=1e-12)
+    assert r["mi_gg"][0] == r["m_gg"][0] > 0.0 and r["mo_gg"][0] == 0.0
+
+
+def test_gg_temperature_is_the_flame_temperature_at_the_mixture_ratio_of_its_own_gas(cut_fuel_first):
+    """反応が速ければ、GG の中のガスは「中身の O/F」の燃焼温度になる。酸素と燃料過剰のガスが、反応しないまま同居することはない
+    （停止のころには、起動前に入っていた窒素はすべて流れ出ているので、薄まる分は考えなくてよい）"""
+    r, m = cut_fuel_first, after(cut_fuel_first, T_CUT)
+    T_mix = np.array([float(T_AD(float(of))) for of in r["OF_gg_gas"][m]])
+    assert np.max(np.abs(r["T_gg_K"][m] - T_mix)) < 1.0
+
+
+def test_lox_alone_does_not_cool_fuel_rich_gas_in_the_gg(cut_fuel_first):
+    """燃料弁が閉じて LOX だけが入ってくるあいだ、中身がまだ燃料過剰（O/F 2.9 未満。燃焼温度が最高になる手前）なら、
+    入ってきた酸素は中のガスと燃えるので、温度は下がらない"""
+    r = cut_fuel_first
+    m = after(r, T_CUT) & (r["valve_gg"] == 0.0) & (r["valve_gg_lox"] > 0.0) & (r["OF_gg_gas"] < 2.9)
+    assert m.sum() > 50
+    assert np.all(np.diff(r["T_gg_K"][m]) >= -0.5)
+
+
+def test_nothing_burns_in_the_gg_before_any_fuel_is_admitted():
+    """LOX 弁だけを 40 ms 先に開く。燃料弁が動くまで GG の中にあるのは窒素と酸素だけなので、温度は上がらない"""
+    r = simulate(GGEngine(gg_lox_lag=-0.04), 0.15, 1e-4, record_every=1)
+    assert np.all(r["valve_gg"] == 0.0) and r["valve_gg_lox"].max() > 0.0
+    assert r["T_gg_K"].max() < 400.0
+
+
+def test_nitrogen_in_the_gg_is_conserved_until_gas_starts_to_leave_through_the_turbine():
+    """LOX が入り始めても、タービンへガスが流れ出すまでは、起動前から入っていた窒素の量は変わらない"""
+    r = simulate(GGEngine(gg_lox_lag=-0.01), 0.16, 1e-4, record_every=1)
+    m = r["mdot_t"] == 0.0
+    assert m.sum() > 1000 and r["mdot_gg"][m].max() > 0.0
+    assert np.ptp(r["mi_gg"][m]) < 1e-12
+
+
 # ----------------------------------------------------------------------------- 容器の中のガスの質量保存
 def gas_balance(r, key_in, key_out, key_m):
     """∫(流入 − 流出) dt − 容器の中のガスの質量の変化 [kg]。0 ならガスが湧きも消えもしていない"""
@@ -272,7 +320,7 @@ def test_chamber_temperature_follows_with_the_gas_mass_divided_by_the_inflow():
 
 
 # ----------------------------------------------------------------------------- 時間刻みと安定性（記事 4 ページ目）
-STATES_6 = ["omega", "Pc", "Pgg", "Tc", "Tgg", "Ygg"]            # タンクの残量を除く状態量
+STATES_6 = ["omega", "Pc", "Tc", "m_gg", "mo_gg", "mi_gg"]       # タンクの残量を除く状態量
 
 
 @pytest.fixture(scope="module")
@@ -286,10 +334,11 @@ def eigenvalues():
         d = eng.derivatives(3.0, dict(s_ss, **dict(zip(STATES_6, v))))
         return np.array([d[k] for k in STATES_6])
     x0 = np.array([s_ss[k] for k in STATES_6])
-    assert np.max(np.abs(rhs(x0)) / np.abs(x0)) < 1e-3, "定常に達していない"
+    scale = np.array([s_ss["m_gg"] if k.endswith("_gg") else s_ss[k] for k in STATES_6])   # 窒素の量は定常では 0 なので、GG の質量は全体の量を基準に振る
+    assert np.max(np.abs(rhs(x0)) / scale) < 1e-3, "定常に達していない"
     J = np.zeros((6, 6))
     for j in range(6):
-        h = x0[j] * 1e-5
+        h = scale[j] * 1e-5
         xp, xm = x0.copy(), x0.copy()
         xp[j] += h
         xm[j] -= h

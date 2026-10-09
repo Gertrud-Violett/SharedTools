@@ -12,12 +12,13 @@ Merlin 1D 級（LOX/RP-1、燃焼圧 9.7 MPa、海面推力 845 kN）を題材�
   ポンプ         : 相似則で無次元化した揚程マップ・軸動力マップ（本来は単体試験で取るもの）
   弁・噴射器     : ṁ = CdA √(2ρΔP)
   ポンプの動作点 : ポンプ曲線と、下流（弁・噴射器）の抵抗曲線の交点を二分法で探す
-  燃焼室 / GG    : 0D の容器。ガスの質量保存（圧力）と、燃焼温度への追従（温度）。GG はガスの組成（O/F）も混ざりながら追従する
+  主燃焼室       : 0D の容器。ガスの質量保存（圧力）と、流れ込む推進剤の燃焼温度への追従（温度）
+  GG             : 0D の容器。中のガスの質量を 3 つ（全体・酸化剤の分・起動前からの窒素）追い、温度は「中身の O/F」の燃焼温度で決める
   燃焼ガスの特性 : 酸燃比 O/F の表。化学平衡計算（RocketCEA）＋ 燃料過剰側は教科書（Huzel & Huang）の代表値
   タービン       : 速度比（周速 ÷ ガスの噴出速度）で決まる効率マップ
   ノズル         : F = η CF_vac Pc At − Pa Ae
 
-状態量: m_f, m_o [kg], omega [rad/s], Pc, Pgg [Pa], Tc, Tgg [K], Ygg（GG の中のガスの酸化剤の質量分率。O/F = Ygg/(1 − Ygg)）
+状態量: m_f, m_o [kg], omega [rad/s], Pc [Pa], Tc [K], m_gg, mo_gg, mi_gg [kg]（GG の中のガスの全体、そのうち酸化剤からできた分、起動前から入っていた窒素）
 起動シーケンス: t = 0 スピンスタート（0.5 s の起動トルク）→ 0.15 s GG 弁 → 0.2–0.5 s 主弁ランプ開
                （燃料弁と LOX 弁は別々。gg_lox_lag / main_lox_lag で LOX 弁を遅らせる。負なら先行）
 停止シーケンス: cutoff_t に停止の指令 → GG 弁（0.05 s）と主弁（0.15 s）を閉じる。gg_cut_t / main_cut_t は、指令から閉じ始め・閉じ切りまでの時間
@@ -85,10 +86,14 @@ CF_VAC = Table1D([1.5, 2.0, 2.2, 2.36, 2.5, 2.8, 3.4], [1.749, 1.783, 1.805, 1.8
 
 
 def gg_gas(Y):
-    """GG の中のガス（酸化剤の質量分率 Y）の定圧比熱 cp [J/kg/K]、比熱比、ガス定数 R [J/kg/K]"""
+    """推進剤が燃えてできた GG のガス（酸化剤の質量分率 Y）の定圧比熱 cp [J/kg/K]、比熱比、ガス定数 R [J/kg/K]"""
     of = Y / max(1.0 - Y, 1e-9)
     cp, gam = GG_CP(of), GG_GAMMA(of)
     return cp, gam, cp * (gam - 1) / gam
+
+
+# --- 起動前から GG に入っているガス: 窒素のパージガス（1 気圧）とする。比熱は 300〜2,000 K のあいだの平均的な値
+N2_CP, N2_R = 1150.0, 296.8             # [J/kg/K]
 
 # --- ポンプ（相似則で無次元化。Qn = (Q/ω)/(Q_d/ω_d)）: 揚程 ΔP = ΔP_d (ω/ω_d)^2 g(Qn)、軸動力 W = W_d (ω/ω_d)^3 p(Qn)
 _QN = [0.0, 0.3, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.75]
@@ -222,7 +227,8 @@ class GGEngine(Model):
         return min(mo / max(mf, 1e-9), 100.0)
 
     def flows(self, t, s):
-        Pc, Pgg, Tc, Tgg = s["Pc"], s["Pgg"], s["Tc"], s["Tgg"]
+        Pc, Tc, g = s["Pc"], s["Tc"], self.gg_state(s)
+        Pgg, Tgg = g["P"], g["T"]
         w = s["omega"] / self.omega_d
         xm_f, xm_o = self.valve_main(t), self.valve_main(t, lox=True)
         xg_f, xg_o = self.valve_gg(t), self.valve_gg(t, lox=True)
@@ -238,8 +244,8 @@ class GGEngine(Model):
         W_f = self.Wd_f * w ** 3 * PUMP_POWER(Q_f / (self.Qd_f * w)) if has_f else 0.0
         W_o = self.Wd_o * w ** 3 * PUMP_POWER(Q_o / (self.Qd_o * w)) if has_o else 0.0
         # --- GG とタービン
-        of_g = self.of_ratio(mo_g, mf_g)                       # GG に流れ込む推進剤の O/F（燃焼温度はこれで決まる）
-        cp, gam, R_g = gg_gas(s["Ygg"])                        # タービンへ流れる、GG の中のガスの性質（組成は流入に遅れて追従）
+        of_g = self.of_ratio(mo_g, mf_g)                       # GG に流れ込む推進剤の O/F
+        cp, gam, R_g = g["cp"], g["gam"], g["R"]               # タービンへ流れる、GG の中のガスの性質
         m_t = crit_flow(gam) * Pgg * self.A_tn / math.sqrt(R_g * Tgg) * unchoke(self.P_exh, Pgg, gam)
         dh = cp * Tgg * (1 - (self.P_exh / Pgg) ** ((gam - 1) / gam)) if Pgg > self.P_exh else 0.0
         x = w * math.sqrt(self.dh / dh) if dh > 0 else 2.0             # 速度比（設計点で 1）
@@ -252,20 +258,33 @@ class GGEngine(Model):
         cstar = CSTAR(of_c) * math.sqrt(Tc / T_AD(of_c))
         m_c_out = Pc * self.A_t / cstar * unchoke(P_ATM, Pc, GAMMA_C)
         F = max(self.d["eta_cf"] * CF_VAC(of_c) * Pc * self.A_t - P_ATM * self.A_e, 0.0) + F_exh
-        return dict(mf_c=mf_c, mo_c=mo_c, mf_g=mf_g, mo_g=mo_g, m_c_out=m_c_out, m_t=m_t, of_c=of_c, of_g=of_g, R_g=R_g,
+        return dict(mf_c=mf_c, mo_c=mo_c, mf_g=mf_g, mo_g=mo_g, m_c_out=m_c_out, m_t=m_t, of_c=of_c, of_g=of_g, Pgg=Pgg, Tgg=Tgg, Ygg=g["Y"],
                     W_f=W_f, W_o=W_o, W_t=W_t, eta_t=eta_t, F=F, F_exh=F_exh, Pd_f=Pd_f, Pd_o=Pd_o)
 
     # ---------------- 状態方程式 ----------------
     def initial_state(self):
-        return {"m_f": self.m_f0, "m_o": self.m_o0, "omega": 50.0, "Pc": P_ATM, "Pgg": P_ATM, "Tc": self.T_init, "Tgg": self.T_init, "Ygg": 0.0}
+        m_n2 = P_ATM * self.V_gg / (N2_R * self.T_init)          # GG は、起動前は 1 気圧の窒素で満たされている
+        return {"m_f": self.m_f0, "m_o": self.m_o0, "omega": 50.0, "Pc": P_ATM, "Tc": self.T_init, "m_gg": m_n2, "mo_gg": 0.0, "mi_gg": m_n2}
+
+    def gg_state(self, s):
+        """GG の中のガスの圧力・温度・組成を、3 つの質量（全体 m_gg、酸化剤からできた分 mo_gg、起動前からの窒素 mi_gg）から求める。
+        よく混ざっていて反応が速いとし、推進剤からできたガスは「中身の O/F」の燃焼温度になる（流れ込んだ酸素は、中の燃料過剰のガスとも燃える）。
+        窒素が残っているあいだは、その分だけ温度が下がる（圧力一定・断熱で混ぜた温度）"""
+        m, mi = s["m_gg"], s["mi_gg"]
+        mp = m - mi                                              # 推進剤からできたガスの質量
+        Y = min(s["mo_gg"] / mp, 0.999) if mp > 1e-12 else 0.0   # その中の酸化剤の質量分率（O/F = Y/(1 − Y)）
+        Z = mp / m
+        cp_p, _, R_p = gg_gas(Y)
+        cp, R = Z * cp_p + (1 - Z) * N2_CP, Z * R_p + (1 - Z) * N2_R
+        T = (Z * cp_p * T_AD(Y / (1 - Y)) + (1 - Z) * N2_CP * self.T_init) / cp
+        return dict(P=m * R * T / self.V_gg, T=T, Y=Y, cp=cp, gam=cp / (cp - R), R=R)
 
     @staticmethod
-    def chamber(P, T, V, R, m_in, m_out, T_target, dlnR=0.0):
-        """0D の容器: 温度は燃焼温度にガスの入れ替わり時間 τ で追従、圧力はガスの質量保存（P = mRT/V の時間微分）。
-        dlnR はガス定数の変化率 d(ln R)/dt（ガスの組成が変わる GG だけ。主燃焼室は R 一定）"""
+    def chamber(P, T, V, R, m_in, m_out, T_target):
+        """主燃焼室: 温度は燃焼温度にガスの入れ替わり時間 τ で追従、圧力はガスの質量保存（P = mRT/V の時間微分。R は一定）"""
         tau = (P * V / (R * T)) / m_in if m_in > 1e-6 else math.inf
         dT = (T_target - T) / tau
-        dP = R * T / V * (m_in - m_out) + P / T * dT + P * dlnR
+        dP = R * T / V * (m_in - m_out) + P / T * dT
         return dP, dT
 
     def derivatives(self, t, s):
@@ -273,38 +292,37 @@ class GGEngine(Model):
         # 軸の運動方程式
         torque_spin = self.spin_torque if t < self.spin_time else 0.0
         torque = (f["W_t"] - f["W_f"] - f["W_o"]) / s["omega"] + torque_spin
-        # 主燃焼室と GG（容器のモデル）
+        # 主燃焼室（圧力と温度）
         T_c = self.d["eta_cstar"] ** 2 * T_AD(f["of_c"])
         dPc, dTc = self.chamber(s["Pc"], s["Tc"], self.V_c, self.R_c,
                                 f["mf_c"] + f["mo_c"], f["m_c_out"], T_c)
-        m_in_g = f["mf_g"] + f["mo_g"]
-        m_gg = s["Pgg"] * self.V_gg / (f["R_g"] * s["Tgg"])                  # GG の中のガスの質量
-        dY = m_in_g * (f["mo_g"] / m_in_g - s["Ygg"]) / m_gg if m_in_g > 1e-6 else 0.0   # 流れ込んだ推進剤が混ざって組成が変わる
-        dlnR = (gg_gas(s["Ygg"] + 1e-6)[2] / f["R_g"] - 1.0) / 1e-6 * dY        # 組成が変わるとガス定数も変わる
-        dPgg, dTgg = self.chamber(s["Pgg"], s["Tgg"], self.V_gg, f["R_g"], m_in_g, f["m_t"], T_AD(f["of_g"]), dlnR)
+        # GG（ガスの質量保存）: タービンへ出ていくガスは、中身と同じ組成
+        out = f["m_t"] / s["m_gg"]
         return {"m_f": -(f["mf_c"] + f["mf_g"]),        # タンクの質量保存
                 "m_o": -(f["mo_c"] + f["mo_g"]),
                 "omega": torque / self.J,
-                "Pc": dPc, "Pgg": dPgg, "Tc": dTc, "Tgg": dTgg, "Ygg": dY}
+                "Pc": dPc, "Tc": dTc,
+                "m_gg": f["mf_g"] + f["mo_g"] - f["m_t"], "mo_gg": f["mo_g"] - out * s["mo_gg"], "mi_gg": -out * s["mi_gg"]}
 
     def clamp(self, s):
         s["m_f"], s["m_o"] = max(s["m_f"], 0.0), max(s["m_o"], 0.0)
-        s["Pc"], s["Pgg"] = max(s["Pc"], P_ATM), max(s["Pgg"], P_ATM)
+        s["Pc"], s["Tc"] = max(s["Pc"], P_ATM), min(max(s["Tc"], 250.0), 4000.0)
         s["omega"] = max(s["omega"], 1.0)
-        s["Tc"], s["Tgg"] = min(max(s["Tc"], 250.0), 4000.0), min(max(s["Tgg"], 250.0), 4000.0)
-        s["Ygg"] = min(max(s["Ygg"], 0.0), 0.999)
+        s["m_gg"] = max(s["m_gg"], 1e-9)
+        s["mi_gg"] = min(max(s["mi_gg"], 0.0), s["m_gg"])
+        s["mo_gg"] = min(max(s["mo_gg"], 0.0), s["m_gg"] - s["mi_gg"])
         return s
 
     def outputs(self, t, s):
         f = self.flows(t, s)
         m_c, m_g = f["mf_c"] + f["mo_c"], f["mf_g"] + f["mo_g"]
         return dict(F_kN=f["F"] / 1e3, Isp=f["F"] / (max(m_c + m_g, 1e-6) * G0), rpm=s["omega"] * 60 / (2 * math.pi),
-                    Pc_MPa=s["Pc"] / 1e6, Pgg_MPa=s["Pgg"] / 1e6, Pd_f_MPa=f["Pd_f"] / 1e6, Pd_o_MPa=f["Pd_o"] / 1e6,
+                    Pc_MPa=s["Pc"] / 1e6, Pgg_MPa=f["Pgg"] / 1e6, Pd_f_MPa=f["Pd_f"] / 1e6, Pd_o_MPa=f["Pd_o"] / 1e6,
                     mdot_c=m_c, mdot_gg=m_g, gg_pct=100 * m_g / max(m_c + m_g, 1e-6),
-                    OF_mcc=f["of_c"], OF_gg=f["of_g"], OF_gg_gas=s["Ygg"] / (1.0 - s["Ygg"]), OF_engine=self.of_ratio(f["mo_c"] + f["mo_g"], f["mf_c"] + f["mf_g"]),
-                    T_c_K=s["Tc"], T_gg_K=s["Tgg"], W_t_MW=f["W_t"] / 1e6, W_p_MW=(f["W_f"] + f["W_o"]) / 1e6, eta_t=f["eta_t"],
+                    OF_mcc=f["of_c"], OF_gg=f["of_g"], OF_gg_gas=f["Ygg"] / (1.0 - f["Ygg"]), OF_engine=self.of_ratio(f["mo_c"] + f["mo_g"], f["mf_c"] + f["mf_g"]),
+                    T_c_K=s["Tc"], T_gg_K=f["Tgg"], W_t_MW=f["W_t"] / 1e6, W_p_MW=(f["W_f"] + f["W_o"]) / 1e6, eta_t=f["eta_t"],
                     mdot_c_out=f["m_c_out"], mdot_t=f["m_t"],                                    # 容器から出ていく流量（ノズル・タービン）
-                    m_gas_c=s["Pc"] * self.V_c / (self.R_c * s["Tc"]), m_gas_gg=s["Pgg"] * self.V_gg / (f["R_g"] * s["Tgg"]),   # 容器の中のガスの質量
+                    m_gas_c=s["Pc"] * self.V_c / (self.R_c * s["Tc"]), m_gas_gg=s["m_gg"],       # 容器の中のガスの質量
                     valve_main=self.valve_main(t), valve_main_lox=self.valve_main(t, lox=True), valve_gg=self.valve_gg(t), valve_gg_lox=self.valve_gg(t, lox=True))
 
 

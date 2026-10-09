@@ -683,8 +683,9 @@ def study_rocket():
                 e = float("inf")
             err[m].append(e)
     # 固有値（定常点まわりで線形化）
-    s_ss = {k: float(r[k][-1]) for k in ("m_f", "m_o", "omega", "Pc", "Pgg", "Tc", "Tgg", "Ygg")}
-    keys = ["omega", "Pc", "Pgg", "Tc", "Tgg", "Ygg"]                    # タンクの残量を除く状態量
+    keys = ["omega", "Pc", "Tc", "m_gg", "mo_gg", "mi_gg"]               # タンクの残量を除く状態量
+    s_ss = {k: float(r[k][-1]) for k in ["m_f", "m_o"] + keys}
+    scale = np.array([s_ss["m_gg"] if k.endswith("_gg") else s_ss[k] for k in keys])   # 窒素の量は定常では 0 なので、GG の質量は全体の量を基準に振る
 
     def rhs(v):
         s = dict(s_ss, **dict(zip(keys, v)))
@@ -692,14 +693,15 @@ def study_rocket():
         return np.array([dd[k] for k in keys])
     x0 = np.array([s_ss[k] for k in keys]); J = np.zeros((len(keys), len(keys)))
     for j in range(len(keys)):
-        h = x0[j] * 1e-5; xp, xm = x0.copy(), x0.copy(); xp[j] += h; xm[j] -= h
+        h = scale[j] * 1e-5; xp, xm = x0.copy(), x0.copy(); xp[j] += h; xm[j] -= h
         J[:, j] = (rhs(xp) - rhs(xm)) / (2 * h)
     ev = np.linalg.eigvals(J)
-    lam = float(max(abs(ev)))
+    assert max(abs(ev.imag)) < 1e-6 * max(abs(ev.real)) and max(ev.real) < 0, "固有値が負の実数でない（安定限界の見積もりは、負の実数の場合の式）"
+    lam = float(max(abs(ev.real)))
     m_gas = s_ss["Pc"] * eng.V_c / (eng.R_c * s_ss["Tc"])
     S["gg_int"] = dict(dts_ms=[x * 1e3 for x in dts], err=err, eig_real=sorted(float(x.real) for x in ev), eig_imag_max=float(max(abs(ev.imag))), lam_max=lam,
                        tau_fast_ms=1e3 / lam, dt_lim_euler_ms=2e3 / lam, dt_lim_rk4_ms=2.785e3 / lam, m_gas_c=m_gas, tau_res_ms=1e3 * m_gas / b["mdot_c"],
-                       m_gas_gg=s_ss["Pgg"] * eng.V_gg / (d["R_g"] * s_ss["Tgg"]), tau_res_gg_ms=1e3 * s_ss["Pgg"] * eng.V_gg / (d["R_g"] * s_ss["Tgg"]) / b["mdot_gg"])
+                       m_gas_gg=s_ss["m_gg"], tau_res_gg_ms=1e3 * s_ss["m_gg"] / b["mdot_gg"])
     # 精度の次数: 時間刻みを 0.5 ms → 0.2 ms にしたときの誤差の減り方から求める。起動トルクを途中で切らない場合（段差なし）も計算して比べる
     def orders(**kw):
         rf = ref if not kw else simulate(GGEngine(**kw), 1.5, 2e-5, method="rk4", record_every=1)
