@@ -19,7 +19,7 @@ Merlin 1D 級（LOX/RP-1、燃焼圧 9.7 MPa、海面推力 845 kN）を題材�
   ノズル         : F = η CF_vac Pc At − Pa Ae（海面で燃焼圧が下がると、流れが壁からはがれる分も考える）
 
 状態量: m_f, m_o [kg], omega [rad/s], Pc [Pa], Tc [K], m_gg, mo_gg, mi_gg [kg]（GG の中のガスの全体、そのうち酸化剤からできた分、起動前から入っていた窒素）
-起動シーケンス: t = 0 スピンスタート（0.5 s の起動トルク）→ 0.15 s GG 弁 → 0.2–0.5 s 主弁ランプ開
+起動シーケンス: t = 0 スピンスタート（0.5 s まで。起動トルクは回転数とともに下がり、設計回転数で 0）→ 0.15 s GG 弁 → 0.2–0.5 s 主弁ランプ開
                （燃料弁と LOX 弁は別々。gg_lox_lag / main_lox_lag で LOX 弁を遅らせる。負なら先行）
 停止シーケンス: cutoff_t に停止の指令 → GG 弁（0.05 s）と主弁（0.15 s）を閉じる。gg_cut_t / main_cut_t は、指令から閉じ始め・閉じ切りまでの時間
                （LOX 弁を 20 ms 先に閉じて燃料過剰のまま止める。gg_lox_cut_lag / main_lox_cut_lag が負なら燃料弁が、正なら LOX 弁がその分遅れて閉じる）
@@ -191,7 +191,7 @@ def design_point(**kw):
 # ============================================================================= 動的モデル
 class GGEngine(Model):
     def __init__(self, gg_lox_scale=1.0, mcc_lox_scale=1.0, A_gg_orifice_scale=1.0, gg_lox_lag=0.0, main_lox_lag=0.0,
-                 gg_valve_t=0.15, main_valve_t=(0.20, 0.50), spin_torque=250.0, spin_time=0.5,
+                 gg_valve_t=0.15, main_valve_t=(0.20, 0.50), spin_torque=450.0, spin_time=0.5,
                  cutoff_t=None, gg_cut_t=(0.0, 0.05), main_cut_t=(0.0, 0.15), gg_lox_cut_lag=-0.02, main_lox_cut_lag=-0.02,
                  eta_turb=None, burn_time=150.0, T_init=300.0, design=None):
         d = self.d = design or design_point()
@@ -232,6 +232,12 @@ class GGEngine(Model):
     def valve_gg(self, t, lox=False):
         lag, cut_lag = (self.gg_lox_lag, max(self.gg_lox_cut_lag, 0.0)) if lox else (0.0, max(-self.gg_lox_cut_lag, 0.0))
         return min(min(max((t - self.gg_valve_t - lag) / 0.1, 0.0), 1.0), self.closing(t, self.gg_cut_t, cut_lag))
+
+    # ---------------- 起動トルク ----------------
+    def spin(self, t, omega):
+        """スピンスタート（外部のガスでタービンを回して起動する方式）のトルク [N·m]。
+        止まっているとき spin_torque で、回転数とともに直線で下がり、設計回転数で 0 になる（それより上では 0）。spin_time で止める"""
+        return self.spin_torque * max(1.0 - omega / self.omega_d, 0.0) if t < self.spin_time else 0.0
 
     # ---------------- 部品：ポンプの動作点 ----------------
     def pump_point(self, rho, Qd, dPd, w, cda_c, cda_g, Pc, Pgg, has_liquid):
@@ -325,8 +331,7 @@ class GGEngine(Model):
     def derivatives(self, t, s):
         f = self.flows(t, s)            # ポンプの動作点・各流量・動力
         # 軸の運動方程式
-        torque_spin = self.spin_torque if t < self.spin_time else 0.0
-        torque = (f["W_t"] - f["W_f"] - f["W_o"]) / s["omega"] + torque_spin
+        torque = (f["W_t"] - f["W_f"] - f["W_o"]) / s["omega"] + self.spin(t, s["omega"])
         # 主燃焼室（圧力と温度）
         T_c = self.d["eta_cstar"] ** 2 * T_AD(f["of_c"])
         dPc, dTc = self.chamber(s["Pc"], s["Tc"], self.V_c, self.R_c,
@@ -356,6 +361,7 @@ class GGEngine(Model):
                     mdot_c=m_c, mdot_gg=m_g, gg_pct=100 * m_g / max(m_c + m_g, 1e-6),
                     OF_mcc=f["of_c"], OF_gg=f["of_g"], OF_gg_gas=f["Ygg"] / (1.0 - f["Ygg"]), OF_engine=self.of_ratio(f["mo_c"] + f["mo_g"], f["mf_c"] + f["mf_g"]),
                     T_c_K=s["Tc"], T_gg_K=f["Tgg"], W_t_MW=f["W_t"] / 1e6, W_p_MW=(f["W_f"] + f["W_o"]) / 1e6, eta_t=f["eta_t"],
+                    W_spin_MW=self.spin(t, s["omega"]) * s["omega"] / 1e6,                       # 起動トルクが軸に与える動力
                     mdot_c_out=f["m_c_out"], mdot_t=f["m_t"],                                    # 容器から出ていく流量（ノズル・タービン）
                     m_gas_c=s["Pc"] * self.V_c / (self.R_c * s["Tc"]), m_gas_gg=s["m_gg"],       # 容器の中のガスの質量
                     valve_main=self.valve_main(t), valve_main_lox=self.valve_main(t, lox=True), valve_gg=self.valve_gg(t), valve_gg_lox=self.valve_gg(t, lox=True))

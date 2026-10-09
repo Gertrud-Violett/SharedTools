@@ -132,11 +132,11 @@ def base():
 
 def test_old_start_sequence_regression():
     """主弁を 0.3〜0.9 s で開く以前の手順の結果が、意図せず変わっていないことの確認（回帰テスト）。
-    値は、GG の温度を中身の O/F で決める版（2026-10）で計算したもの。モデルの式を変えたら、確かめたうえで更新する"""
+    値は、起動トルクが回転数とともに下がる版（2026-10）で計算したもの。モデルの式を変えたら、確かめたうえで更新する"""
     r = run(3.0, main_valve_t=(0.30, 0.90))
-    assert r["rpm"].max() == pytest.approx(45379.623761775285, rel=1e-9)
-    assert r["Pd_o_MPa"].max() == pytest.approx(25.15486482883821, rel=1e-9)
-    assert r["t"][np.argmax(r["F_kN"] > 0.9 * r["F_kN"][-1])] == pytest.approx(0.583, abs=1e-9)
+    assert r["rpm"].max() == pytest.approx(44967.94248662225, rel=1e-9)
+    assert r["Pd_o_MPa"].max() == pytest.approx(24.594729271064736, rel=1e-9)
+    assert r["t"][np.argmax(r["F_kN"] > 0.9 * r["F_kN"][-1])] == pytest.approx(0.586, abs=1e-9)
 
 
 def test_base_start_settles_at_the_design_point(base):
@@ -167,7 +167,7 @@ def test_base_start_time_to_90_percent_thrust_does_not_depend_on_the_recording_i
     t_coarse = crossing_time(base["t"], base["F_kN"], 0.9 * F_D)
     t_fine = crossing_time(fine["t"], fine["F_kN"], 0.9 * F_D)
     assert t_coarse == pytest.approx(t_fine, abs=2e-5)
-    assert 0.4605 < t_fine < 0.4615
+    assert 0.4537 < t_fine < 0.4547
 
 
 def test_base_start_keeps_gg_temperature_near_design(base):
@@ -179,14 +179,35 @@ def test_base_start_keeps_main_chamber_mixture_ratio_near_design(base):
     assert 2.30 < base["OF_mcc"][burning].min() and base["OF_mcc"][burning].max() < 2.45
 
 
+def test_starter_torque_falls_linearly_with_speed_and_is_zero_at_design_speed():
+    """スピンスタート（外部のガスでタービンを回す）のトルク: 止まっているとき最大で、回転数とともに下がり、設計回転数で 0。spin_time で止める"""
+    eng = GGEngine()
+    w_d = eng.omega_d
+    assert eng.spin(0.0, 0.0) == eng.spin_torque > 0.0
+    assert eng.spin(0.1, 0.5 * w_d) == pytest.approx(0.5 * eng.spin_torque, rel=1e-12)
+    assert eng.spin(0.1, w_d) == 0.0 and eng.spin(0.1, 1.2 * w_d) == 0.0          # 設計回転数より上では、押しも引きもしない
+    assert eng.spin(eng.spin_time, 0.5 * w_d) == 0.0 and eng.spin(eng.spin_time - 1e-9, 0.5 * w_d) > 0.0
+
+
+def test_starter_alone_cannot_take_the_shaft_above_design_speed():
+    """GG に点火しなければ（弁を開かなければ）、起動トルクだけでは設計回転数を超えない"""
+    r = run(1.0, gg_valve_t=10.0, main_valve_t=(10.0, 10.3))
+    assert r["W_t_MW"].max() == 0.0
+    assert 5000.0 < r["rpm"].max() <= RPM_D
+
+
+def test_base_start_does_not_overshoot_in_speed(base):
+    assert base["rpm"].max() / RPM_D - 1 < 0.001
+
+
 def test_rotor_energy_balance_during_start():
-    """軸の回転エネルギーの増加 = ∫(タービン出力 − ポンプ動力) dt + ∫(起動トルク × 角速度) dt"""
+    """軸の回転エネルギーの増加 = ∫(タービン出力 − ポンプ動力 + 起動トルクの動力) dt"""
     eng = GGEngine()
     r = simulate(eng, 1.5, DT, record_every=1)
     t, w = r["t"], r["omega"]
-    spin = np.where(t < eng.spin_time, eng.spin_torque, 0.0) * w
+    assert r["W_spin_MW"].max() > 0.2 and np.all(r["W_spin_MW"][t >= eng.spin_time] == 0.0)
     gained = 0.5 * eng.J * (w[-1] ** 2 - w[0] ** 2)
-    supplied = trapezoid((r["W_t_MW"] - r["W_p_MW"]) * 1e6 + spin, t)
+    supplied = trapezoid((r["W_t_MW"] - r["W_p_MW"] + r["W_spin_MW"]) * 1e6, t)
     assert gained == pytest.approx(supplied, rel=2e-3)
 
 
