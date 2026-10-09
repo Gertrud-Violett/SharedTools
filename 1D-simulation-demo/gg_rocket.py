@@ -16,7 +16,7 @@ Merlin 1D 級（LOX/RP-1、燃焼圧 9.7 MPa、海面推力 845 kN）を題材�
   GG             : 0D の容器。中のガスの質量を 3 つ（全体・酸化剤の分・起動前からの窒素）追い、温度は「中身の O/F」の燃焼温度で決める
   燃焼ガスの特性 : 酸燃比 O/F の表。化学平衡計算（RocketCEA）＋ 燃料過剰側は教科書（Huzel & Huang）の代表値
   タービン       : 速度比（周速 ÷ ガスの噴出速度）で決まる効率マップ
-  ノズル         : F = η CF_vac Pc At − Pa Ae
+  ノズル         : F = η CF_vac Pc At − Pa Ae（海面で燃焼圧が下がると、流れが壁からはがれる分も考える）
 
 状態量: m_f, m_o [kg], omega [rad/s], Pc [Pa], Tc [K], m_gg, mo_gg, mi_gg [kg]（GG の中のガスの全体、そのうち酸化剤からできた分、起動前から入っていた窒素）
 起動シーケンス: t = 0 スピンスタート（0.5 s の起動トルク）→ 0.15 s GG 弁 → 0.2–0.5 s 主弁ランプ開
@@ -105,6 +105,18 @@ def gg_gas(Y):
 # --- 起動前から GG に入っているガス: 窒素のパージガス（1 気圧）とする。比熱は 300〜2,000 K のあいだの平均的な値
 N2_CP, N2_R = 1150.0, 296.8             # [J/kg/K]
 
+# --- 主ノズルの中の膨張（理想気体の等エントロピー流れ）。海面で燃焼圧が下がったときの、流れのはく離の計算に使う
+GAMMA_NOZ = 1.183                       # 膨張を表す比熱比。開口比 16 のときの圧力比 Pc/Pe が、化学平衡計算（CEA）の 139.8 に合う値
+K_SEP = 0.4                             # 壁の圧力が大気圧のこの倍率まで下がった所で、流れが壁からはがれるとする（Summerfield の目安。0.3〜0.4）
+
+
+def nozzle(pr, gam=GAMMA_NOZ):
+    """圧力が燃焼圧の pr 倍まで下がった断面の (面積比 A/At, そこでノズルを切ったときの真空推力係数)"""
+    M = math.sqrt(2 / (gam - 1) * (pr ** (-(gam - 1) / gam) - 1))
+    eps = (2 / (gam + 1) * (1 + (gam - 1) / 2 * M * M)) ** ((gam + 1) / (2 * (gam - 1))) / M
+    return eps, crit_flow(gam) * math.sqrt(2 * gam / (gam - 1) * (1 - pr ** ((gam - 1) / gam))) + pr * eps
+
+
 # --- ポンプ（相似則で無次元化。Qn = (Q/ω)/(Q_d/ω_d)）: 揚程 ΔP = ΔP_d (ω/ω_d)^2 g(Qn)、軸動力 W = W_d (ω/ω_d)^3 p(Qn)
 _QN = [0.0, 0.3, 0.6, 0.8, 1.0, 1.2, 1.4, 1.6, 1.75]
 PUMP_HEAD = Table1D(_QN, [1.25, 1.24, 1.18, 1.10, 1.00, 0.85, 0.62, 0.30, 0.00], "ポンプ揚程マップ g(Qn)")
@@ -190,6 +202,8 @@ class GGEngine(Model):
         self.CdA_gg_f, self.CdA_gg_o = d["CdA_gg_f"] * A_gg_orifice_scale, d["CdA_gg_o"] * A_gg_orifice_scale * gg_lox_scale
         self.eta_turb = d["eta_turb"] if eta_turb is None else eta_turb
         self.R_c = 8314.46 / 22.66                                # 主燃焼室ガスのガス定数 [J/kg/K]（分子量 22.66、CEA）
+        self.pr_exit = bisect(lambda pr: nozzle(pr)[0] - d["eps"], 1e-6, 0.5)   # 主ノズルの出口の圧力比 Pe/Pc（流れが出口まで壁に沿っているとき）
+        self.cf_exit = nozzle(self.pr_exit)[1]                    # そのときの真空推力係数（理想気体の式の値。はく離したときとの比に使う）
         # タンク: 設計流量 × burn_time 秒ぶんを積む
         self.m_f0, self.m_o0 = (d["mf_c"] + d["mf_g"]) * burn_time, (d["mo_c"] + d["mo_g"]) * burn_time
         # 起動シーケンス
@@ -236,6 +250,17 @@ class GGEngine(Model):
     def of_ratio(mo, mf):
         return min(mo / max(mf, 1e-9), 100.0)
 
+    def main_thrust(self, Pc, of_c):
+        """主ノズルの海面推力 [N]。流れが出口まで壁に沿っていれば F = η CF_vac Pc At − Pa Ae。
+        燃焼圧が下がり、出口より手前で壁の圧力が大気圧の K_SEP 倍まで下がると、流れはそこで壁からはがれ、その先の壁には大気圧がかかる。
+        このときは、はがれる断面でノズルを切ったものとして計算する（推力係数も、背圧を受ける面積も、その断面までの値になる）"""
+        eps, cf = self.d["eps"], self.d["eta_cf"] * CF_VAC(of_c)
+        pr_sep = K_SEP * P_ATM / Pc                              # はがれる断面の圧力 ÷ 燃焼圧
+        if pr_sep > self.pr_exit:
+            eps, cf_cut = nozzle(pr_sep)
+            cf *= cf_cut / self.cf_exit
+        return (cf * Pc * self.A_t - P_ATM * (eps * self.A_t)) * unchoke(P_ATM, Pc, GAMMA_C)   # 燃焼圧が大気圧まで下がれば 0
+
     def flows(self, t, s):
         Pc, Tc, g = s["Pc"], s["Tc"], self.gg_state(s)
         Pgg, Tgg = g["P"], g["T"]
@@ -267,7 +292,7 @@ class GGEngine(Model):
         of_c = self.of_ratio(mo_c, mf_c)
         cstar = CSTAR(of_c) * math.sqrt(Tc / T_AD(of_c))
         m_c_out = Pc * self.A_t / cstar * unchoke(P_ATM, Pc, GAMMA_C)
-        F = max(self.d["eta_cf"] * CF_VAC(of_c) * Pc * self.A_t - P_ATM * self.A_e, 0.0) + F_exh
+        F = self.main_thrust(Pc, of_c) + F_exh
         return dict(mf_c=mf_c, mo_c=mo_c, mf_g=mf_g, mo_g=mo_g, m_c_out=m_c_out, m_t=m_t, of_c=of_c, of_g=of_g, Pgg=Pgg, Tgg=Tgg, Ygg=g["Y"],
                     W_f=W_f, W_o=W_o, W_t=W_t, eta_t=eta_t, F=F, F_exh=F_exh, Pd_f=Pd_f, Pd_o=Pd_o)
 

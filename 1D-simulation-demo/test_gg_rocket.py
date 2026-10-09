@@ -355,6 +355,53 @@ def test_vacuum_thrust_adds_the_back_pressure_on_both_the_nozzle_and_the_turbine
     assert D["F_vac"] - D["F_sl"] == pytest.approx(P_ATM * (D["A_e"] + D["A_exh"]), rel=1e-12)
 
 
+# ----------------------------------------------------------------------------- 主ノズル（海面での流れのはく離）
+def full_flow_thrust(eng, Pc, of_c=None):
+    """はく離を考えない式: F = η CF_vac Pc At − Pa Ae"""
+    return eng.d["eta_cf"] * float(gg_rocket.CF_VAC(D["OF_c"] if of_c is None else of_c)) * Pc * eng.A_t - P_ATM * eng.A_e
+
+
+def test_nozzle_flows_full_at_the_design_point_so_the_thrust_formula_is_unchanged_there():
+    eng = GGEngine()
+    assert eng.main_thrust(D["Pc"], D["OF_c"]) == pytest.approx(full_flow_thrust(eng, D["Pc"]), rel=1e-12)
+    assert gg_rocket.nozzle(eng.pr_exit)[0] == pytest.approx(D["eps"], rel=1e-9)        # 出口の圧力比のところで、面積比がちょうど開口比になる
+
+
+def test_nozzle_separation_starts_where_the_exit_pressure_falls_to_the_assumed_fraction_of_ambient():
+    """出口の圧力が大気圧の K_SEP 倍になる燃焼圧を境に、それより上は従来の式、下ははく離を考えた式。境目で推力は連続"""
+    eng = GGEngine()
+    Pc_sep = gg_rocket.K_SEP * P_ATM / eng.pr_exit
+    assert 4e6 < Pc_sep < 7e6
+    assert eng.main_thrust(Pc_sep * 1.001, D["OF_c"]) == pytest.approx(full_flow_thrust(eng, Pc_sep * 1.001), rel=1e-12)
+    assert eng.main_thrust(Pc_sep * 0.999, D["OF_c"]) == pytest.approx(full_flow_thrust(eng, Pc_sep * 0.999), rel=1e-3)
+
+
+@pytest.mark.parametrize("Pc", [5e6, 3e6, 1e6, 0.5e6, 0.2e6])
+def test_separated_nozzle_gives_more_thrust_than_the_full_flow_formula(Pc):
+    """はがれた先の壁には大気圧がかかるので、満流のまま過膨張させた式より推力は大きい。燃焼圧が大気圧より高いあいだは、推力は正"""
+    eng = GGEngine()
+    assert eng.main_thrust(Pc, D["OF_c"]) > max(full_flow_thrust(eng, Pc), 0.0)
+
+
+def test_main_thrust_is_zero_when_the_chamber_is_at_ambient_pressure():
+    assert GGEngine().main_thrust(P_ATM, D["OF_c"]) == 0.0
+
+
+def test_a_choked_nozzle_still_pushes_during_shutdown(cut):
+    """停止の途中、燃焼圧が 0.5 MPa（約 5 気圧）まで下がった時点でも、スロートはチョークしていてガスが出ているので、推力は 0 ではない"""
+    m = after(cut, T_CUT)
+    i = int(np.argmax(cut["Pc_MPa"][m] <= 0.5))
+    assert cut["mdot_c_out"][m][i] > 1.0
+    assert cut["F_kN"][m][i] > 5.0
+
+
+def test_thrust_is_gone_only_when_the_chamber_is_nearly_empty(cut):
+    """推力が停止前の 1 % まで下がるのは、燃焼圧が 3 気圧より下がってから"""
+    m = after(cut, T_CUT)
+    i = int(np.argmax(cut["F_kN"][m] <= 0.01 * F_D))
+    assert cut["Pc_MPa"][m][i] * 1e6 < 3.0 * P_ATM
+
+
 # ----------------------------------------------------------------------------- 容器のモデル（部品の単体テスト）
 def test_chamber_temperature_follows_with_the_gas_mass_divided_by_the_inflow():
     """τ = 容器の中のガスの質量 ÷ 流入量。定常では流入 = 流出なので、流出で割る誤りは、流入と流出が違う状態でないと見つからない"""
