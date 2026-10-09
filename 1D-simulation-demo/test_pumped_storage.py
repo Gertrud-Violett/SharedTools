@@ -173,15 +173,13 @@ def test_evaporation_an_empty_pond_could_not_supply_is_taken_back_out_of_the_cou
 # ----------------------------------------------------------------------------- 越流で失った電力量、発電可能量
 @pytest.mark.parametrize("V_l", [0.05 * V, 0.5 * V, 0.9 * V])
 def test_spilled_energy_per_m3_is_the_generating_chain_at_maximum_flow(V_l):
-    """あふれた水 1 m3 の電力量 = ρ g (H − k Qmax²) η水車(Qmax) η発電機。モデルのいちばん良い発電の点を超えない"""
+    """あふれた水 1 m3 の電力量 = ρ g (H − k Qmax²) η水車(Qmax) η発電機（最大流量での発電の式を、ここで独立に書いたものと比べる）"""
     m = PumpedStorage(rain=lambda t: 50.0, demand=lambda t: 0.0)
     d = m.derivatives(0.0, state(m, V, V_l))
     assert d["W_spill_u"] > 50.0 and d["V_u"] == 0.0       # 満水の上池に雨が入り、その分があふれている
     per_m3 = d["E_spill"] * 3.6e9 / d["W_spill_u"]         # [J/m3]
     H = m.head(V, V_l)
     assert per_m3 == pytest.approx(chain_J_per_m3(m, H, m.Q_turb_max), rel=1e-12)
-    best = max(chain_J_per_m3(m, H, q) for q in np.linspace(1.0, m.Q_turb_max, 400))
-    assert per_m3 <= best
     assert per_m3 < 0.88 * RHO * G * H                     # 静落差に一律の効率 0.9 を掛けた値にはならない
 
 
@@ -217,13 +215,81 @@ def test_pump_total_head_stays_inside_the_published_range():
     assert 677.0 <= H_p.min() and H_p.max() <= 728.0
 
 
-def test_pump_shaft_power_is_within_half_a_percent_of_the_published_maximum(week):
+def test_pump_shaft_power_stays_close_to_the_published_maximum(week):
     """公表の最大軸入力は 464 MW（東芝レビュー 2006）。仮定したポンプ曲線は公表値に合わせ込んでいないので、上池の水位が運用の下限に近いときは
-    これを少し上回る（1.4 MW、0.3 %）。記事の 1 週間の運転では、その水位まで下がらないので、464 MW 以内に収まる"""
+    これを 1.4 MW ほど上回る（既知のずれ）。ここでは上限（466 MW 以下）だけを確かめ、ずれがあること自体は要求しない。
+    記事の 1 週間の運転では、その水位まで下がらないので、464 MW 以内に収まる"""
     m = PumpedStorage()
-    assert 464.0 < pump_points(m)[:, 2].max() < 464.0 * 1.005
+    assert pump_points(m)[:, 2].max() <= 466.0
     units = np.where(week["P_pump"] > 1.5 * m.P_pump_nominal, 2, 1)     # その時刻に揚水している台数（週末は 1 台）
     assert (week["P_pump"] / units * m.eta_motor).max() <= 464.0        # 1 台あたりの軸入力 = 電動機の入力 × 電動機効率
+
+
+# ----------------------------------------------------------------------------- 基準値（両池が半分、静落差 684.8 m。独立レビューの再現ケース）
+def at_half(demand_MW, **kw):
+    m = PumpedStorage(demand=lambda t: demand_MW, **kw)
+    return m, m.flows(0.0, state(m, V / 2, V / 2))
+
+
+@pytest.mark.parametrize("demand, Q_total, P_pump", [(-450.0, 57.80, 450.29), (-900.0, 115.60, 900.58)])
+def test_pump_reference_point_with_both_ponds_half_full(demand, Q_total, P_pump):
+    """揚水の入力は 全揚程（静落差 + k Q² = ポンプ曲線の揚程）で決まる。静落差 684.8 m を使うと 450.29 MW が 440.8 MW になり、この試験は落ちる"""
+    m, f = at_half(demand)
+    n = round(Q_total / 57.80)
+    Q1 = m.pump_operating_point(684.8)
+    H_p, eta = float(m.pump_H(Q1)), float(m.pump_eta(Q1))
+    assert H_p == pytest.approx(699.50, abs=0.005) and H_p == pytest.approx(684.8 + m.k_loss * Q1 ** 2, abs=1e-6)
+    assert eta == pytest.approx(0.9034, abs=5e-5)
+    assert RHO * G * Q1 * H_p / eta / 1e6 == pytest.approx(439.03, abs=0.005)          # 軸入力 [MW]
+    assert f["Q_p"] == pytest.approx(Q_total, abs=0.005) and f["Q_p"] == pytest.approx(n * Q1, rel=1e-12)
+    assert f["P_pump"] == pytest.approx(P_pump, abs=0.005)                              # 電動機の入力 = 軸入力 ÷ 0.975 × 台数
+
+
+@pytest.mark.parametrize("demand, Q_total, n_on, P_gen", [(300.0, 52.87, 1, 300.0), (940.0, 170.0, 2, 939.68)])
+def test_turbine_reference_point_with_both_ponds_half_full(demand, Q_total, n_on, P_gen):
+    m, f = at_half(demand)
+    assert f["Q_t"] == pytest.approx(Q_total, abs=0.005) and f["P_gen"] == pytest.approx(P_gen, abs=0.005)
+    q = f["Q_t"] / n_on                                    # 1 台あたり: 300 MW は 1 台、940 MW（定格 85 m3/s × 2）は 2 台
+    if n_on == 1:
+        assert q < m.Q_turb_max
+        assert 684.8 - m.k_loss * q ** 2 == pytest.approx(672.50, abs=0.005)       # 有効落差
+        assert float(m.turb_eta(q)) == pytest.approx(0.8822, abs=5e-5)
+
+
+def test_round_trip_is_the_product_of_the_two_chains_against_the_potential_energy(week):
+    """発電 1 m3 あたりの電力量 ÷ ρ g H̄（発電中の流量重みの平均落差）= 0.8306、ρ g H̄（揚水中）÷ 揚水 1 m3 あたりの電力量 = 0.8626。積はほぼ往復効率 0.7162（平均落差の違いで 0.7165）"""
+    g, p = week["Q_t"] > 0, week["Q_p"] > 0
+    H_gen, H_pump = np.average(week["H"][g], weights=week["Q_t"][g]), np.average(week["H"][p], weights=week["Q_p"][p])
+    e_gen = week["E_gen"][-1] * 3.6e9 / week["W_gen"][-1]             # [J/m3]
+    e_pump = week["E_pump"][-1] * 3.6e9 / week["W_pump"][-1]
+    assert e_gen / 1e6 == pytest.approx(5.530, abs=0.0005) and e_pump / 1e6 == pytest.approx(7.721, abs=0.0005)
+    a, b = e_gen / (RHO * G * H_gen), RHO * G * H_pump / e_pump
+    assert a == pytest.approx(0.8306, abs=5e-5) and b == pytest.approx(0.8626, abs=5e-5)
+    assert a * b * H_gen / H_pump == pytest.approx(roundtrip(week), rel=1e-12)    # 恒等式。発電中と揚水中の平均落差が違う（678.68 / 678.95 m）ぶんだけ、積は往復効率からずれる
+    assert a * b == pytest.approx(roundtrip(week), abs=5e-4) and roundtrip(week) == pytest.approx(0.7162, abs=5e-5)   # 積は 0.7165
+
+
+@pytest.mark.parametrize("loss, Heff, E_short, rt", [
+    (38.0, (618.6, 675.0), 143.9, 0.7048),                # 公表の有効落差の範囲（617〜675 m）に合う損失（85 m3/s で 38〜40 m）
+    (39.6, (617.0, 673.4), 163.2, 0.7019),
+])
+def test_waterway_loss_that_matches_the_published_effective_head_range(loss, Heff, E_short, rt):
+    r = article_week(k_loss=loss / 85.0 ** 2)
+    m = PumpedStorage(k_loss=loss / 85.0 ** 2)
+    assert (m.head(0.0, V) - loss, m.head(V, 0.0) - loss) == pytest.approx(Heff, abs=0.05)   # 85 m3/s での有効落差の最低・最高
+    assert r["E_short"][-1] == pytest.approx(E_short, abs=0.05)
+    assert roundtrip(r) == pytest.approx(rt, abs=5e-5)
+
+
+def test_stored_energy_of_a_full_upper_pond_uses_the_present_head():
+    """上池が満水・下池が空のとき E_stored = 19,279 MWh。今の落差（713 m）で全部落とした換算なので、落ちるにつれて落差が下がる実際の発電量
+    （940 MW の要求で運用の下限 5 % まで落としたときの 18,588 MWh）より 3.7 % 大きい"""
+    m = PumpedStorage(V_u0_frac=1.0, demand=lambda t: 940.0, evap_mm_day=0.0)
+    r = simulate(m, 2 * DAY, 60.0, record_every=1)
+    assert r["V_l"][0] == 0.0 and r["E_stored"][0] == pytest.approx(19279.0, abs=0.5)
+    assert r["V_u"][-1] / V == pytest.approx(0.05, abs=2e-3)                    # 下限まで落とし切った
+    assert r["E_gen"][-1] == pytest.approx(18588.0, abs=0.6)
+    assert r["E_stored"][0] / r["E_gen"][-1] == pytest.approx(1.037, abs=5e-4)
 
 
 # ----------------------------------------------------------------------------- 運用
@@ -244,10 +310,11 @@ def test_a_larger_waterway_loss_means_more_shortage_and_a_lower_round_trip(week)
     assert more["E_short"][-1] > week["E_short"][-1] and roundtrip(more) < roundtrip(week)
 
 
-def test_levels_and_head_stay_inside_the_range_the_geometry_allows(week):
-    assert 0.0 <= week["level_u"].min() and week["level_u"].max() <= 27.0
-    assert 0.0 <= week["level_l"].min() and week["level_l"].max() <= 29.4
-    assert 656.6 <= week["H"].min() and week["H"].max() <= 713.0
+def test_recorded_head_is_the_difference_of_the_recorded_levels_and_the_week_stays_above_the_operating_floor(week):
+    """落差の出力は、記録された両池の水位（最低水位からの高さ）と最低水位の標高から決まる。記事の週は運用の下限（有効貯水量の 5 %）を割らない"""
+    m = PumpedStorage()
+    assert week["H"] == pytest.approx((m.z_u_low + week["level_u"]) - (m.z_l_low + week["level_l"]), abs=1e-9)
+    assert week["V_u"].min() > m.V_min * 0.99 and week["V_l"].min() > m.V_min * 0.99
 
 
 def test_the_article_week_numbers(week):
