@@ -509,7 +509,7 @@ def study_rocket():
         ax.plot(hist[k]["t"], hist[k]["T_gg_K"], color=c, lw=2.8, ls=ls, label=lab)
     ax.axhline(T_LIM, color=PINK, ls="--", lw=1.8); label(ax, 0.398, T_LIM + 40, f"タービン入口温度の目安 {T_LIM:,.0f} K", color="#c0569a", ha="right", va="bottom", size=14)
     ax.set_xlim(0.12, 0.40); ax.set_ylim(0, 3600); legend(ax, loc="upper right"); commas(ax)
-    save(f, "1dcae2_29_gg_lead_time_v6.png")
+    save(f, "1dcae2_29_gg_lead_time_v8.png")
 
     f, ax = chart("GGのLOX弁のタイミングと、GG出口温度のピーク", "LOX弁のずれ [ms]（マイナス＝LOXが先、プラス＝燃料が先）", "GG出口温度のピーク [K]",
                   "燃料が先なら温度は設計値のまま。LOXが先だと、燃料が届いた直後のGGは極端な酸素過剰で、\nそこから燃焼温度が最高になる O/F 3 付近を通り抜ける。細い線は、起動前のGGの窒素の量を半分・2倍にした場合")
@@ -520,7 +520,7 @@ def study_rocket():
     ax.axhline(T_LIM, color=PINK, ls="--", lw=1.8); label(ax, 43, T_LIM + 50, f"タービン入口温度の目安 {T_LIM:,.0f} K", color="#c0569a", ha="right", va="bottom", size=14)
     label(ax, -42, 400, "LOX が先", va="center"); label(ax, 42, 400, "燃料が先", ha="right", va="center")
     ax.set_xlim(-45, 45); ax.set_ylim(0, 4200); commas(ax); legend(ax, loc="upper right", fontsize=14)
-    save(f, "1dcae2_30_gg_lead_peak_v6.png")
+    save(f, "1dcae2_30_gg_lead_peak_v8.png")
 
     # ----- 主弁の LOX 先行／遅れ
     mlags = np.round(np.arange(-0.15, 0.151, 0.025), 3)
@@ -690,7 +690,7 @@ def study_rocket():
     ax.annotate("基準ケース", (clags[ib] * 1e3, Tcl[ib]), xytext=(clags[ib] * 1e3, 330), fontsize=15, color=INK, va="center", ha="center", arrowprops=dict(arrowstyle="->", color=INK, lw=1.3, shrinkB=7))
     label(ax, -42, 3900, "LOX が先", va="center"); label(ax, 42, 400, "燃料が先", ha="right", va="center")
     ax.set_xlim(-45, 45); ax.set_ylim(0, 4200); commas(ax)
-    save(f, "1dcae2_45_cut_gg_temp_v6.png")
+    save(f, "1dcae2_45_cut_gg_temp_v8.png")
 
     # ----- 設計の仮定を振る（時間変化なしの計算）: タービン効率 → GG 流量と比推力
     ets = np.round(np.arange(0.35, 0.701, 0.05), 2)

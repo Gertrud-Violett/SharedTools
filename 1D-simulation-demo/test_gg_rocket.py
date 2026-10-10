@@ -67,6 +67,17 @@ def test_gg_gas_properties_beyond_the_textbook_table_follow_the_equilibrium_valu
     assert cp == pytest.approx(gam * R / (gam - 1), rel=1e-12)
 
 
+def test_gg_gas_constant_counts_only_the_gas_where_soot_forms():
+    """O/F 0.8 と 1.0 では、化学平衡計算の組成に固体の炭素（すす）が 13% と 5% 含まれる。固体は圧力を生まないので、ガス定数は
+    「混合物 1 kg あたりの気体のモル数」から求める（分子量 16.59 と 15.93）。固体まで気体のモルに数えた値（13.99 と 14.98）ではない"""
+    for of, m_gas, m_all in ((0.8, 16.59, 13.99), (1.0, 15.93, 14.98)):
+        cp, gam, R = gg_gas(of / (1 + of))
+        assert R == pytest.approx(8314.46 / m_gas, rel=1e-6)
+        assert R < 8314.46 / m_all * 0.95                           # 固体を気体に数えると、ガス定数を 6〜19% 大きく見積もる
+        assert cp == pytest.approx(gam * R / (gam - 1), rel=1e-12)
+    assert gg_gas(1.25 / 2.25)[2] == pytest.approx(8314.46 / 15.97, rel=1e-6)   # O/F 1.25 から上は固体がなく、値は変わらない
+
+
 def test_gg_gas_at_the_oxygen_end_is_nearly_oxygen():
     """ほとんど酸素だけのガスのガス定数は、酸素の値（8314.46 ÷ 32.0 = 259.8 J/kg/K）に近い"""
     cp, gam, R = gg_gas(0.99)
@@ -89,8 +100,10 @@ def test_embedded_combustion_tables_match_rocketcea():
         ivac, cstar_ft, tc_R = cea.get_IvacCstrTc(Pc=pc, MR=of, eps=cea_tables.EPS)
         assert float(T_AD(float(of))) == pytest.approx(tc_R / 1.8, abs=0.51)
         assert float(gg_rocket.CSTAR(float(of))) == pytest.approx(cstar_ft * 0.3048, abs=0.51)
-        mw, gam = cea.get_Chamber_MolWt_gamma(Pc=cea_tables.GG_PRESSURE_RATIO * pc, MR=of, eps=cea_tables.EPS)
-        assert float(gg_rocket.GG_R(float(of))) == pytest.approx(8314.46 / mw, rel=5e-4)
+        mw_all, gam = cea.get_Chamber_MolWt_gamma(Pc=cea_tables.GG_PRESSURE_RATIO * pc, MR=of, eps=cea_tables.EPS)
+        mw, soot = cea_tables.gas_molwt(cea, cea_tables.GG_PRESSURE_RATIO * pc, of)
+        assert float(gg_rocket.GG_R(float(of))) == pytest.approx(8314.46 / mw, rel=5e-4)   # 固体の炭素を除いた、気体だけの分子量
+        assert (soot > 0.01) == (of in (0.8, 1.0)) and (mw == pytest.approx(mw_all, rel=1e-4)) == (soot == 0.0)
         assert float(gg_rocket.GG_GAMMA(float(of))) == pytest.approx(gam, abs=5.1e-4)
     for of, cf in zip(gg_rocket.CF_VAC.x, gg_rocket.CF_VAC.y):
         ivac, cstar_ft, _ = cea.get_IvacCstrTc(Pc=pc, MR=float(of), eps=cea_tables.EPS)

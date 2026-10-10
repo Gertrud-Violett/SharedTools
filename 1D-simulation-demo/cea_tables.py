@@ -12,6 +12,20 @@ PC_BAR, EPS = 97.0, 16.0                      # Merlin 1D 級: 燃焼圧 9.7 MPa
 GG_PRESSURE_RATIO = 0.8                       # GG の圧力 ÷ 燃焼圧（gg_rocket.DESIGN の k_gg と同じ）
 OFS = [0.8, 1.0, 1.25, 1.5, 1.75, 2.0, 2.2, 2.36, 2.5, 2.8, 3.0, 3.4, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 30.0, 40.0, 60.0, 100.0]   # gg_rocket.py の _OF_CEA と同じ点
 
+
+def gas_molwt(cea, pc, of, eps=EPS):
+    """気体だけの分子量 [g/mol]（＝ 混合物 1 kg ÷ 気体のモル数）と、固体の炭素（すす）の質量分率を返す。
+    RocketCEA の get_Chamber_MolWt_gamma が返す分子量は、固体の炭素 C(gr) も気体のモルに数えた値なので、すすが出る O/F（1.0 以下）では
+    小さくなりすぎる（O/F 0.8 で 13.99。気体だけなら 16.59）。固体は圧力を生まないので、ガス定数 R = 8314.46 ÷ M に使う分子量からは除く。
+    水は気体として数える: 表の圧力（7.76 MPa）では O/F 100（351 K）で一部が液体になるが、GG がこの状態を通るのは圧力が下がった停止の終わり"""
+    mw_d, y_d = cea.get_SpeciesMassFractions(Pc=pc, MR=of, eps=eps, frozen=0, frozenAtThroat=0, min_fraction=1e-7)
+    y = {k: float(v[1]) for k, v in y_d.items()}                      # v = [噴射面, 燃焼室, スロート, 出口]。燃焼室の値を使う
+    assert abs(sum(y.values()) - 1.0) < 1e-3, f"O/F {of}: 化学種の質量分率の合計が 1 になりません"
+    soot = sum(v for k, v in y.items() if k.startswith("C("))
+    n_gas = sum(v / mw_d[k] for k, v in y.items() if not k.startswith("C("))
+    return 1.0 / n_gas, soot
+
+
 if __name__ == "__main__":
     cea = CEA_Obj(oxName="LOX", fuelName="RP-1")
     pc = PC_BAR * PSI_PER_BAR
@@ -34,10 +48,13 @@ if __name__ == "__main__":
         cf.append(round(float(ivac) * 9.80665 / (float(cstar_ft) * 0.3048), 4))   # CF_vac = Isp_vac × g0 ÷ c*
     print("CF_VAC（O/F", CF_OFS, "）=", cf)
     pgg = GG_PRESSURE_RATIO * pc
-    gg = [cea.get_Chamber_MolWt_gamma(Pc=pgg, MR=of, eps=EPS) for of in OFS]              # gg_rocket.py の _M_CEA、_GAM_CEA
+    gg = [cea.get_Chamber_MolWt_gamma(Pc=pgg, MR=of, eps=EPS) for of in OFS]              # gg_rocket.py の _GAM_CEA（分子量は下の気体だけの値を使う）
+    gas = [gas_molwt(cea, pgg, of) for of in OFS]                                         # gg_rocket.py の _M_CEA
     print(f"\nGG の圧力（{GG_PRESSURE_RATIO * PC_BAR / 10:.2f} MPa）での分子量と比熱比（O/F は上と同じ点）")
-    print("_M_CEA   =", [round(float(m), 2) for m, _ in gg])
+    print("_M_CEA   =", [round(float(m), 2) for m, _ in gas])
     print("_GAM_CEA =", [round(float(g), 3) for _, g in gg])
+    print("固体の炭素（すす）が出る点: " + "、".join(f"O/F {of:g} で質量の {s * 100:.1f}%（固体も数えた分子量は {float(m_all):.2f}）"
+                                          for of, (_, s), (m_all, _) in zip(OFS, gas, gg) if s > 0))
     ivac, cstar_ft, tc_R = cea.get_IvacCstrTc(Pc=pc, MR=2.36, eps=EPS)
     print(f"\n設計点 O/F 2.36: Tc = {tc_R/1.8:.0f} K, c* = {cstar_ft*0.3048:.1f} m/s, 真空推力係数 CF_vac = {ivac*9.80665/(cstar_ft*0.3048):.4f}, 真空比推力 = {ivac:.1f} s")
     # 参考: 燃料過剰の GG を化学平衡で計算すると、実機（O/F 0.32 で約 900 K）より高い温度になる。gg_rocket.py が GG の領域に実測ベースの表を使う理由
