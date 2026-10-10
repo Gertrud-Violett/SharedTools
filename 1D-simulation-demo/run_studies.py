@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.ticker
 from matplotlib import font_manager as _fm
 from onedsim import Model, simulate, bisect, _step_euler, _step_rk2, _step_rk4
-from pumped_storage import PumpedStorage, make_demand, make_rain, roundtrip, DAY, RHO, G
+from pumped_storage import PumpedStorage, make_demand, make_rain, roundtrip, DAY, RHO, G, H_EFF_RATED, H_EFF_LIMITS
 from gg_rocket import GGEngine, design_point, crossing_time, T_AD, PUMP_HEAD, PUMP_POWER, HH_A1, K_SEP, P_ATM
 
 trapezoid = getattr(np, "trapezoid", None) or np.trapz   # 台形則の積分。NumPy 2 では trapezoid、1.x では trapz
@@ -178,14 +178,20 @@ def study_pumped():
     Qm = m.Q_turb_max
     H_rated = lambda mm: mm.P_unit * 1e6 / (RHO * G * Qm * mm.turb_eta(Qm) * mm.eta_gen) + mm.k_loss * Qm ** 2   # 1台で定格出力を出すのに要る落差 [m]
     b["H_rated"] = H_rated(m)
-    # 池の形と落差（公表水位から）、水路の損失（仮定: 両池が半分・85 m3/s で有効落差 653 m）、定格点
+    # 池の形と落差（公表水位から）、水路の損失（仮定: 85 m3/s のときの有効落差の範囲が、公表の 最高 675 m・最低 617 m に合う）、定格点（有効落差 653 m・85 m3/s）
     Vh = 0.5 * m.V_max
     b["H_half"] = m.head(Vh, Vh)                                                     # 両池とも有効貯水量の半分のときの落差 [m]
+    loss = m.k_loss * Qm ** 2                                                        # 85 m3/s のときの水路の損失 [m]
+    H_at_rated = H_EFF_RATED + loss                                                  # 有効落差が基準の 653 m になる落差 [m]
     b.update(z_u_full=m.z_u_full, z_u_low=m.z_u_low, z_l_full=m.z_l_full, z_l_low=m.z_l_low, depth_u=m.z_u_full - m.z_u_low, depth_l=m.z_l_full - m.z_l_low,
              V_max=m.V_max, A_u_ha=m.A_u / 1e4, A_l_ha=m.A_l / 1e4, level_l_full=m.V_max / m.A_l,
              H_both_full=m.head(m.V_max, m.V_max), H_both_low=m.head(0.0, 0.0), H_geo_max=m.head(m.V_max, 0.0), H_geo_min=m.head(0.0, m.V_max),
-             k_loss=m.k_loss, loss_rated=m.k_loss * Qm ** 2, Heff_rated=b["H_half"] - m.k_loss * Qm ** 2, Q_rated=Qm,
-             P_gen_rated=m.unit_power(Qm, b["H_half"]), P_turb_rated=m.unit_power(Qm, b["H_half"]) / m.eta_gen, eta_turb_rated=float(m.turb_eta(Qm)), eta_gen=m.eta_gen,
+             k_loss=m.k_loss, loss_rated=loss, Heff_pub=list(H_EFF_LIMITS), Heff_rated_pub=H_EFF_RATED, Q_rated=Qm,
+             Heff_max=m.head(m.V_max, 0.0) - loss, Heff_min=m.head(0.0, m.V_max) - loss, Heff_half=b["H_half"] - loss,   # 85 m3/s のときの有効落差: 最高・最低・両池が半分のとき
+             H_at_Heff_rated=H_at_rated,
+             P_gen_rated=m.unit_power(Qm, H_at_rated), P_turb_rated=m.unit_power(Qm, H_at_rated) / m.eta_gen,           # 有効落差 653 m・85 m3/s での出力（1台）[MW]
+             P_gen_half=m.unit_power(Qm, b["H_half"]),                                                                # 両池が半分のとき、85 m3/s で出せる出力（1台）[MW]
+             eta_turb_rated=float(m.turb_eta(Qm)), eta_gen=m.eta_gen,
              rain_level_rise=b["rain_volume"] / m.A_u)                               # 降った雨の流入量を上池の水位に直した値 [m]
     b["Q_op_Hmin"], b["Q_op_Hmax"], b["Q_op_Hbase"] = (m.pump_operating_point(float(round(b["H_min"]))), m.pump_operating_point(float(round(b["H_max"]))),
                                                      m.pump_operating_point(b["H_half"]))   # 図と本文に書く動作点（落差は m 単位に丸めた値で計算。Q_op_Hbase は両池が半分のとき）
@@ -227,15 +233,18 @@ def study_pumped():
         raise RuntimeError("損失の感度の中央のケースが、基準の週と一致しません")
     S["ps_loss_sens"] = sens
 
-    # --- 公表の有効落差の両端（最高 675 m / 最低 617 m）に合わせた損失で、同じ基準の週を計算する。損失は 85 m3/s のときの値（公表資料は流量・台数を書いていない。推定）
-    pub = dict(Heff_pub=[675.0, 617.0], loss=[b["H_geo_max"] - 675.0, b["H_geo_min"] - 617.0],
-               Heff_model=[b["H_geo_max"] - b["loss_rated"], b["H_geo_min"] - b["loss_rated"]],   # 基準のモデルの、85 m3/s のときの有効落差の範囲
+    # --- 損失の決め方を変えた場合の、同じ基準の週。モデルの損失は「公表の有効落差の両端（最高 675 m・最低 617 m）に、それぞれちょうど合う値」の平均なので、
+    #     その 2 つの値（loss[0]、loss[1]）と、以前の決め方「両池が半分・85 m3/s で有効落差が基準の 653 m」（loss[2]）で計算しておく
+    pub = dict(Heff_pub=list(H_EFF_LIMITS), loss=[b["H_geo_max"] - H_EFF_LIMITS[0], b["H_geo_min"] - H_EFF_LIMITS[1], b["H_half"] - H_EFF_RATED],
+               Heff_model=[b["Heff_max"], b["Heff_min"]],                                       # 基準のモデルの、85 m3/s のときの有効落差の範囲
                k_loss=[], E_short=[], roundtrip=[], level_min=[])
-    for loss in pub["loss"]:
-        mp = PumpedStorage(k_loss=loss / Qm ** 2, rain=make_rain(storm_day=5), demand=make_demand(heatwave_day=2, heatwave_MW=HOT_MW))
+    for loss_alt in pub["loss"]:
+        mp = PumpedStorage(k_loss=loss_alt / Qm ** 2, rain=make_rain(storm_day=5), demand=make_demand(heatwave_day=2, heatwave_MW=HOT_MW))
         rp = simulate(mp, 7 * DAY, 60.0, record_every=5)
         for k, v in dict(k_loss=mp.k_loss, E_short=rp["E_short"][-1], roundtrip=roundtrip(rp), level_min=rp["level_u"].min()).items():
             pub[k].append(float(v))
+    if abs(0.5 * (pub["loss"][0] + pub["loss"][1]) - b["loss_rated"]) > 1e-9:
+        raise RuntimeError("モデルの水路の損失が、公表の有効落差の両端に合う値の平均になっていません")
     S["ps_loss_pub"] = pub
     shade = lambda ax: (ax.axvspan(2, 3, color=STAR, alpha=0.13, lw=0), ax.axvspan(5, 7, color="#dcdfe6", alpha=0.45, lw=0))
     days = ["月", "火", "水", "木", "金", "土", "日"]
@@ -254,7 +263,7 @@ def study_pumped():
     legend(ax, loc="upper right")
     label(ax, 2.5, 1210, f"猛暑日\n要求 {HOT_MW:.0f} MW", ha="center", va="center", size=14)
     commas(ax)
-    save(f, "1dcae2_04_ps_week_power_v6.png")
+    save(f, "1dcae2_04_ps_week_power_v7.png")
 
     # --- 図: 1週間の上池水位
     f, ax = chart("1週間の運転：上池の水位", "曜日", "上池の水位 [m]",
@@ -272,7 +281,7 @@ def study_pumped():
     ax.set_xlim(0, 7); ax.set_ylim(0, 29)
     ax.set_xticks(np.arange(7) + 0.5); ax.set_xticklabels(days); ax.tick_params(axis="x", length=0)
     ax.set_xticks(np.arange(8), minor=True); ax.grid(False, axis="x"); ax.grid(True, axis="x", which="minor", color=GRID, lw=0.9)
-    save(f, "1dcae2_05_ps_week_level_v6.png")
+    save(f, "1dcae2_05_ps_week_level_v7.png")
 
     # --- 図: ポンプの動作点（ポンプ曲線と系の要求曲線の交点）
     f, ax = chart("ポンプの動作点：2本の曲線の交点", "流量 [m³/s]（1台あたり）", "揚程 [m]",
@@ -287,7 +296,7 @@ def study_pumped():
                     arrowprops=dict(arrowstyle="->", color=INK, lw=1.3, shrinkB=8))
     ax.set_xlim(0, 80); ax.set_ylim(580, 800)
     legend(ax, loc="upper right")
-    save(f, "1dcae2_03_ps_operating_point_v6.png")
+    save(f, "1dcae2_03_ps_operating_point_v7.png")
 
     # --- 図: 豪雨の強さ → 越流で失う電力量（猛暑日のない通常の週。揚水を予定どおり続ける場合と、雨のあいだは止める場合）
     rains = np.arange(0, 101, 5)
@@ -309,10 +318,10 @@ def study_pumped():
     label(ax, REC_MM / 24 - 1.5, top * 0.62, "日降水量の国内記録\n（箱根 922.5 mm）\nに相当", ha="right", va="center", size=14, color=MUTED)
     ax.annotate(f"約 {thr[True]:.0f} mm/h までは\nあふれない", (thr[True], 0), xytext=(40.8, top * 0.31), fontsize=15, color=INK, ha="left", va="center",
                 arrowprops=dict(arrowstyle="->", color=INK, lw=1.3, shrinkB=4))
-    ax.annotate(f"揚水を止めれば\n約 {thr[False]:.0f} mm/h まで", (thr[False], 0), xytext=(74.0, top * 0.075), fontsize=15, color=INK, ha="left", va="center",
-                arrowprops=dict(arrowstyle="->", color=INK, lw=1.3, shrinkB=4))
+    ax.annotate(f"揚水を止めれば\n約 {thr[False]:.0f} mm/h まで", (thr[False], 0), xytext=(thr[False] + 13.5, top * 0.105), fontsize=15, color=INK, ha="left", va="center",
+                arrowprops=dict(arrowstyle="->", color=INK, lw=1.3, shrinkB=4))   # 文字は、あふれ始める点の右下（線の下のあいた所）に置く
     ax.set_xlim(-4, 104); ax.set_ylim(-top * 0.04, top); legend(ax, loc="upper left")
-    save(f, "1dcae2_06_ps_rain_v6.png")
+    save(f, "1dcae2_06_ps_rain_v7.png")
 
     # --- 図: ピーク需要 → 供給不足 / 上池の最低水位
     peaks = np.arange(600, 1201, 10)
@@ -335,7 +344,7 @@ def study_pumped():
     ax.annotate("", (onset, top * 0.02), xytext=(onset - 30, top * 0.20), arrowprops=dict(arrowstyle="->", color=INK, lw=1.3))
     ax.axvline(HOT_MW, color=INK, ls=":", lw=1.4); label(ax, HOT_MW + 8, top * 0.93, f"2台の定格 {HOT_MW:.0f} MW", ha="left", va="center", color=MUTED, size=14)
     ax.set_xlim(570, 1230); ax.set_ylim(0, top); commas(ax, "x")
-    save(f, "1dcae2_07_ps_demand_short_v6.png")
+    save(f, "1dcae2_07_ps_demand_short_v7.png")
 
     f, ax = chart("ピーク時の発電要求と、上池の水位の最低値（2台運転）", "ピーク時の発電要求 [MW]", "1週間の上池の水位の最低値 [m]",
                   "要求を上げても、ある点から水位は下がらなくなる（設備の上限で運転していて、それ以上は水を使えないため）。\n"
@@ -344,7 +353,7 @@ def study_pumped():
     ax.axhline(b["level_low"], color=PINK, ls="--", lw=1.8); label(ax, 585, b["level_low"] + 0.35, f"下限 {b['level_low']:.2f} m", color="#c0569a", ha="left", va="bottom")
     label(ax, 1090, lvmin[-1] + 1.0, f"{lvmin[-1]:.1f} m で下げ止まり", ha="center", va="bottom")
     ax.set_xlim(570, 1230); ax.set_ylim(0, 16); commas(ax, "x")
-    save(f, "1dcae2_08_ps_demand_level_v6.png")
+    save(f, "1dcae2_08_ps_demand_level_v7.png")
 
 
 # =============================================================================== ロケットエンジン
