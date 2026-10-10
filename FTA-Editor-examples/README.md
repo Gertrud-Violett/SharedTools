@@ -41,7 +41,7 @@ Example fault trees and an event tree for the FTA Editor article on Makkiblog (i
 2. FTA Editor を起動して、画面下の「読込」からファイルを選びます。
 3. 最小カットセットや重要度を見るときは、画面上部の「詳細機能」をオンにします。
 
-コマンドラインでも計算できます（`fta_editor.exe` のあるフォルダーで）。
+コマンドラインでも計算できます（`fta_editor.exe` のあるフォルダーで実行します。ファイルは同じフォルダーに置くか、場所を付けて指定します）。
 
 ```
 > fta_editor.exe quantify pump_3_shared.json
