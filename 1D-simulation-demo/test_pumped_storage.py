@@ -150,14 +150,22 @@ def test_each_pond_evaporates_from_its_own_area_and_only_the_upper_pond_collects
 
 
 # 池の範囲（0〜V_max）の端で、clamp() が水を作ったり消したりしないこと（7 日間、独立レビューの再現ケース）
-@pytest.mark.parametrize("kw, dt", [
-    (dict(V_u0_frac=0.0, demand=lambda t: 0.0), 60.0),                          # 空の上池から蒸発を数えない
-    (dict(V_u0_frac=1.0, rain=lambda t: 30.0, demand=lambda t: 0.0), 60.0),     # 空の下池から蒸発を数えない
-    (dict(rain=lambda t: 50.0, demand=lambda t: -900.0), 300.0),                # 1 ステップで V_u が V_max を越えても、越えた分を数える
+@pytest.mark.parametrize("kw, dt, min_clipped", [
+    (dict(V_u0_frac=0.0, demand=lambda t: 0.0), 60.0, 0.0),                         # 空の上池から蒸発を数えない
+    (dict(V_u0_frac=1.0, rain=lambda t: 30.0, demand=lambda t: 0.0), 60.0, 0.0),     # 空の下池から蒸発を数えない
+    # 1 ステップで V_u が V_max を越えても、越えた分を数える。損失係数は、この場合が実際に V_max を越える値（K_REF）に固定する
+    # （既定の損失 38.8 m では揚水量が減って越えなくなり、越えた分を数えなくてもテストが通ってしまう。独立レビュー 2026-10-10）
+    (dict(rain=lambda t: 50.0, demand=lambda t: -900.0, k_loss=K_REF), 300.0, 1000.0),
 ])
-def test_water_balance_holds_when_a_pond_hits_its_limit(kw, dt):
+def test_water_balance_holds_when_a_pond_hits_its_limit(kw, dt, min_clipped):
     m = PumpedStorage(**kw)
+    clipped, clamp = [0.0], m.clamp
+    def counting_clamp(s):                             # clamp() が V_max を越えた分として切り取った水量の最大値 [m3] を記録する
+        clipped[0] = max(clipped[0], s["V_u"] - m.V_max, s["V_l"] - m.V_max)
+        return clamp(s)
+    m.clamp = counting_clamp
     r = simulate(m, 7 * DAY, dt, record_every=1)
+    assert clipped[0] >= min_clipped, f"この場合は池が V_max を越えるはず（越えた量 {clipped[0]:.1f} m3）"
     assert abs(water_balance_error(r)) < 1e-4          # 丸め誤差の積み重ね（池の水量 1e7 m3 の桁で 1e-6〜1e-5 m3）より上、バグ（1e3〜1e4 m3）よりずっと下
     assert r["V_u"].min() >= 0.0 and r["V_l"].min() >= 0.0
     assert r["V_u"].max() <= m.V_max and r["V_l"].max() <= m.V_max

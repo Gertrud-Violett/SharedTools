@@ -465,6 +465,8 @@ def test_gas_mass_is_conserved_in_both_volumes_when_the_gg_mixture_ratio_swings(
 def test_vacuum_thrust_adds_the_back_pressure_on_both_the_nozzle_and_the_turbine_exhaust():
     """真空では、主ノズルとタービン排気の出口の両方で、大気圧が押し返していた分だけ推力が増える"""
     assert D["A_exh"] > 0.0
+    # 排気ノズルの出口面積の手計算: 出口温度 784.29 K → 大気圧まで膨張して 736.7 K、流速 504.7 m/s、密度 0.5583 kg/m3、流量 17.544 kg/s → 0.06227 m2
+    assert D["A_exh"] == pytest.approx(0.06227, rel=2e-3)
     assert D["F_vac"] - D["F_sl"] == pytest.approx(P_ATM * (D["A_e"] + D["A_exh"]), rel=1e-12)
 
 
