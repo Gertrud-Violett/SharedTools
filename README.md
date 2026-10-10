@@ -38,3 +38,8 @@ Main calculation file
 Minimal 1D (lumped-parameter) system simulator in pure Python + numpy (onedsim), with a pumped-storage hydro plant model and a gas-generator-cycle rocket engine start-up model. Parametric studies reproduce all figures of the article.
 
 https://makkiblog.com/1dcae_intro1/
+
+## FTA-Editor-examples
+Example fault trees and an event tree for FTA Editor (https://github.com/Gertrud-Violett/FTA_Editor): a cooling-water system with a duty pump, a standby pump and a shared breaker. The plant and all numbers are fictional. Refer to the article (in Japanese) for details:
+
+https://makkiblog.com/fta_editor_intro/
