@@ -1,0 +1,57 @@
+{
+  "title": "冷却水が止まったあと（ETA）",
+  "date": "2026-10-10",
+  "mode": "ETA",
+  "tree": {
+    "id": "root",
+    "name": "冷却水が止まる",
+    "type": "Root",
+    "logicGate": "OR",
+    "probability": 1.0,
+    "notes": "",
+    "links": [],
+    "children": [
+      {
+        "id": "root_0",
+        "name": "警報が鳴る",
+        "type": "Event",
+        "logicGate": "OR",
+        "probability": 0.99,
+        "notes": "",
+        "links": [],
+        "children": [
+          {
+            "id": "root_0_0",
+            "name": "設備を止める（生産停止のみ）",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.95,
+            "notes": "",
+            "links": [],
+            "children": []
+          },
+          {
+            "id": "root_0_1",
+            "name": "止めるのが遅れる（設備が過熱）",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.05,
+            "notes": "",
+            "links": [],
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "root_1",
+        "name": "警報が鳴らない（設備が過熱）",
+        "type": "Event",
+        "logicGate": "OR",
+        "probability": 0.01,
+        "notes": "",
+        "links": [],
+        "children": []
+      }
+    ]
+  }
+}

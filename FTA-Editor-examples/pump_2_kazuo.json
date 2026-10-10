@@ -1,0 +1,98 @@
+{
+  "title": "冷却水ポンプ停止（かずお版）",
+  "date": "2026-10-10",
+  "mode": "FTA",
+  "tree": {
+    "id": "root",
+    "name": "冷却水が止まる",
+    "type": "Root",
+    "logicGate": "AND",
+    "probability": 1.0,
+    "notes": "",
+    "links": [],
+    "children": [
+      {
+        "id": "root_0",
+        "name": "常用ポンプが止まる",
+        "type": "Event",
+        "logicGate": "OR",
+        "probability": 1.0,
+        "notes": "",
+        "links": [],
+        "children": [
+          {
+            "id": "root_0_0",
+            "name": "常用ポンプの故障",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.00137,
+            "notes": "",
+            "links": [],
+            "children": []
+          },
+          {
+            "id": "root_0_1",
+            "name": "常用の電源が落ちる",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 4.57e-05,
+            "notes": "",
+            "links": [],
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "root_1",
+        "name": "予備が引き継げない",
+        "type": "Event",
+        "logicGate": "OR",
+        "probability": 1.0,
+        "notes": "",
+        "links": [],
+        "children": [
+          {
+            "id": "root_1_0",
+            "name": "予備ポンプの故障",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.00833,
+            "notes": "",
+            "links": [],
+            "children": []
+          },
+          {
+            "id": "root_1_1",
+            "name": "自動切替の失敗",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.00417,
+            "notes": "",
+            "links": [],
+            "children": []
+          },
+          {
+            "id": "root_1_2",
+            "name": "予備ポンプが整備中",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.00548,
+            "notes": "",
+            "links": [],
+            "children": []
+          },
+          {
+            "id": "root_1_3",
+            "name": "予備の電源が落ちる",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 4.57e-05,
+            "notes": "",
+            "links": [],
+            "children": []
+          }
+        ]
+      }
+    ]
+  }
+}

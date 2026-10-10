@@ -1,0 +1,165 @@
+{
+  "title": "冷却水ポンプ停止（AIの提案を人が確認した版）",
+  "date": "2026-10-10",
+  "mode": "FTA",
+  "tree": {
+    "id": "root",
+    "name": "冷却水が止まる",
+    "type": "Gate",
+    "logicGate": "OR",
+    "probability": 1.0,
+    "notes": "単一故障点と独立故障の組合せのOR",
+    "links": [],
+    "children": [
+      {
+        "id": "indep_overlap",
+        "name": "常用・予備の独立故障が重なる",
+        "type": "Gate",
+        "probability": 1.0,
+        "calculatedProbability": 2.45529170695e-05,
+        "logicGate": "AND",
+        "notes": "共通要因（ブレーカ等）を除いた独立故障の組合せ",
+        "children": [
+          {
+            "id": "root_0_0",
+            "name": "常用ポンプの故障",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.00137,
+            "notes": "",
+            "links": [],
+            "children": [],
+            "calculatedProbability": 0.00137
+          },
+          {
+            "id": "root_1",
+            "name": "予備が引き継げない",
+            "type": "Gate",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "予備系固有の要因のみ。共通電源はroot直下で扱う",
+            "links": [],
+            "children": [
+              {
+                "id": "root_1_0",
+                "name": "予備ポンプの故障",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.00833,
+                "notes": "",
+                "links": [],
+                "children": [],
+                "calculatedProbability": 0.00833
+              },
+              {
+                "id": "root_1_1",
+                "name": "自動切替の失敗",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.00417,
+                "notes": "",
+                "links": [],
+                "children": [],
+                "calculatedProbability": 0.00417
+              },
+              {
+                "id": "root_1_2",
+                "name": "予備ポンプが整備中",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.00548,
+                "notes": "",
+                "links": [],
+                "children": [],
+                "calculatedProbability": 0.00548
+              }
+            ],
+            "calculatedProbability": 0.017921837277
+          }
+        ],
+        "links": []
+      },
+      {
+        "id": "root_0_1",
+        "name": "ブレーカが落ちる",
+        "type": "Event",
+        "logicGate": "OR",
+        "probability": 4.57e-05,
+        "notes": "",
+        "links": [],
+        "children": [],
+        "calculatedProbability": 4.57e-05
+      },
+      {
+        "id": "pump_ccf",
+        "name": "ポンプ共通原因故障",
+        "type": "Event",
+        "probability": 6.9e-05,
+        "calculatedProbability": 6.9e-05,
+        "logicGate": "",
+        "notes": "βファクタ法 β=0.05（NUREG/CR-5497等の一般値）。同型・同保守のポンプに適用",
+        "children": [],
+        "links": []
+      },
+      {
+        "id": "upstream_power_loss",
+        "name": "上位電源の喪失（停電・母線故障）",
+        "type": "Event",
+        "probability": 5e-05,
+        "calculatedProbability": 5e-05,
+        "logicGate": "",
+        "notes": "暫定値。系統停電実績と非常用電源の有無に応じて要見直し",
+        "children": [],
+        "links": []
+      },
+      {
+        "id": "common_flowpath_fail",
+        "name": "共通流路の閉塞・水源喪失",
+        "type": "Event",
+        "probability": 0.0001,
+        "calculatedProbability": 0.0001,
+        "logicGate": "",
+        "notes": "暫定値。ストレーナ差圧監視の有無で大きく変わる",
+        "children": [],
+        "links": []
+      },
+      {
+        "id": "valve_misalignment",
+        "name": "整備後の手動弁閉止忘れ",
+        "type": "Event",
+        "probability": 3e-05,
+        "calculatedProbability": 3e-05,
+        "logicGate": "",
+        "notes": "HEP 1e-3程度 × 整備頻度から算出した暫定値。チェックリスト運用で低減可",
+        "children": [],
+        "links": []
+      }
+    ],
+    "calculatedProbability": 0.00031921238465
+  },
+  "analysis": {
+    "missionTime": 8760.0,
+    "timeUnit": "h",
+    "cutsets": {
+      "maxOrder": 6,
+      "maxCount": 5000,
+      "cutoff": 1e-15
+    },
+    "mc": {
+      "n": 10000,
+      "seed": null
+    },
+    "fmeaOccurrenceTable": {
+      "1": 1e-07,
+      "2": 1e-06,
+      "3": 1e-05,
+      "4": 0.0001,
+      "5": 0.0005,
+      "6": 0.002,
+      "7": 0.01,
+      "8": 0.02,
+      "9": 0.05,
+      "10": 0.1
+    }
+  }
+}
