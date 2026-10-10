@@ -6,6 +6,7 @@ onedsim — まきブログ版・最小1Dシミュレーションエンジン
   1. Table1D   : 試験で得た特性曲線（ポンプのQ-H曲線など）をテーブルとして引く
   2. Model     : 「状態量」と「その時間微分」を定義する（＝部品をつないだ系全体の方程式）
   3. simulate  : 微分方程式を時間積分する（オイラー法 / 2段・4段ルンゲ＝クッタ法）
+おまけとして、パラメータを振る sweep と、部品どうしの「つり合い点」を探す二分法 bisect が付いています。
 
 商用ソフト（Amesim, GT-SUITE, EcosimPro...）はこれに GUI・部品ライブラリ・陰解法ソルバーを
 足したものだと思ってください。依存は numpy のみです。
@@ -19,6 +20,7 @@ onedsim — まきブログ版・最小1Dシミュレーションエンジン
     res["t"], res["x"], res["x2"]  -> numpy 配列
 """
 from __future__ import annotations
+from bisect import bisect_right
 import numpy as np
 
 
@@ -30,11 +32,36 @@ class Table1D:
         self.x = np.asarray(x, float)
         self.y = np.asarray(y, float)
         self.name = name
-        if np.any(np.diff(self.x) <= 0):
-            raise ValueError(f"Table1D {name}: x は単調増加で与えてください")
+        if self.x.ndim != 1 or self.x.size < 1 or self.x.shape != self.y.shape or not np.all(np.isfinite(self.x) & np.isfinite(self.y)) or np.any(np.diff(self.x) <= 0):
+            raise ValueError(f"Table1D {name}: x と y は同じ長さ（1点以上）の有限の値で、x は単調増加で与えてください")
+        self._x, self._y = self.x.tolist(), self.y.tolist()
 
     def __call__(self, xq):
-        return np.interp(xq, self.x, self.y)
+        if isinstance(xq, float):                    # 数値1個のときは自前で補間（numpy を通すより数倍速い）
+            x, y = self._x, self._y
+            if xq <= x[0] or len(x) == 1:            # 1点だけの表は定数
+                return y[0]
+            if xq >= x[-1]:
+                return y[-1]
+            i = min(bisect_right(x, xq), len(x) - 1)     # xq が NaN のときは最後の区間の式に入り、NaN がそのまま返る（np.interp と同じ）
+            return y[i - 1] + (y[i] - y[i - 1]) * (xq - x[i - 1]) / (x[i] - x[i - 1])
+        return np.interp(xq, self.x, self.y)         # 配列はまとめて補間
+
+
+def bisect(f, a, b, n=40):
+    """二分法: f(a) と f(b) の符号が違うとき、f(x)=0 になる x を返す。
+    ポンプ曲線と配管抵抗の交点（動作点）のような「部品どうしのつり合い」を解くのに使う。"""
+    fa, fb = f(a), f(b)
+    if not (fa <= 0 <= fb or fb <= 0 <= fa):     # 解をはさんでいない（端でちょうど 0 になるのはよい）。NaN もここで止まる
+        raise ValueError(f"bisect: f({a:g}) と f({b:g}) が同じ符号です。解をはさむ区間を与えてください")
+    for _ in range(n):
+        m = 0.5 * (a + b)
+        fm = f(m)
+        if fm != fm:                             # 区間の途中で NaN になった。黙って端の値を返さない
+            raise ValueError(f"bisect: f({m:g}) が NaN です")
+        # 符号で比べる（積 fa*fm だと、値がごく小さいときに 0 に丸まって判定を誤る）
+        a, b, fa = (a, m, fa) if (fa <= 0 <= fm or fm <= 0 <= fa) else (m, b, fm)
+    return 0.5 * (a + b)
 
 
 # ----------------------------------------------------------------------------- 2. モデル基底
@@ -94,31 +121,43 @@ def simulate(model: Model, t_end: float, dt: float, method: str = "rk4",
     s = dict(model.initial_state())
     t = 0.0
     n = int(round(t_end / dt))
-    rec = {"t": []}
-    for k in list(s) + list(model.outputs(0.0, s)):
-        rec[k] = []
+    if n < 1 or abs(n * dt - t_end) > 1e-9 * max(1.0, abs(t_end)) or record_every < 1:
+        raise ValueError(f"t_end（{t_end}）は時間刻み dt（{dt}）の整数倍に、record_every（{record_every}）は 1 以上にしてください")
+    keys = ["t"] + list(s) + list(model.outputs(0.0, s))
+    if len(set(keys)) < len(keys):
+        raise ValueError(f"状態量と outputs() に同じ名前があります（t も使えません）: {keys}")
+    rec = {k: [] for k in keys}
     stopped = False
 
     def record(t, s):
+        o = model.outputs(t, s)                      # 先に計算する（ここで失敗しても、記録の長さがそろったままになる）
         rec["t"].append(t)
-        for k, v in s.items():
-            rec[k].append(v)
-        for k, v in model.outputs(t, s).items():
+        for k, v in list(s.items()) + list(o.items()):
             rec[k].append(v)
 
     record(t, s)
+    if stop_when is not None and stop_when(t, s):    # 最初から打ち切りの条件を満たしているときは、1 ステップも進めない
+        stopped, n = True, 0
     for i in range(1, n + 1):
-        s = model.clamp(step(model, t, s, dt))
-        t = i * dt
-        if i % record_every == 0:
-            record(t, s)
+        try:
+            s_new = step(model, t, s, dt)
+            if not all(np.isrealobj(v) and np.all(np.isfinite(v)) for v in s_new.values()):   # clamp() で隠れる前に調べる
+                raise FloatingPointError("状態量が無限大・NaN・複素数になりました")
+            s, t = model.clamp(s_new), i * dt
+            if i % record_every == 0:
+                record(t, s)
+        except (ValueError, OverflowError, ZeroDivisionError, FloatingPointError) as exc:   # 負の数の平方根なども含む
+            err = FloatingPointError(f"t={t:.4g}: 計算を続けられません（{type(exc).__name__}: {exc}）。状態量の発散なら、時間刻み dt を"
+                                     "小さくするか method を 'rk4' に。モデルの式の誤りでも起きるので、元の例外も確かめてください")
+            err.result = {k: np.asarray(v, float) for k, v in rec.items()}     # 止まる直前までの記録
+            raise err from exc
         if stop_when is not None and stop_when(t, s):
             stopped = True
             if i % record_every:
                 record(t, s)
             break
-        if any(not np.isfinite(v) for v in s.values()):
-            raise FloatingPointError(f"t={t:.4g}: 状態量が発散しました（dt を小さくするか、method='rk4'（4段ルンゲ＝クッタ法）を使ってください）")
+    if not stopped and n % record_every:             # 最後の状態は必ず記録する
+        record(t, s)
     out = {k: np.asarray(v, float) for k, v in rec.items()}
     out["stopped"] = stopped
     return out
@@ -130,8 +169,6 @@ def sweep(make_model, param_name: str, values, t_end, dt, metric, **sim_kw):
     make_model(**{param_name: v}) でモデルを作り、metric(res) -> float を values ごとに評価。
     戻り値: (values, metrics) の numpy 配列。
     """
-    ms = []
-    for v in values:
-        res = simulate(make_model(**{param_name: v}), t_end, dt, **sim_kw)
-        ms.append(metric(res))
+    values = list(values)                            # ジェネレータで渡されても、計算と戻り値の両方に使えるように
+    ms = [metric(simulate(make_model(**{param_name: v}), t_end, dt, **sim_kw)) for v in values]
     return np.asarray(values, float), np.asarray(ms, float)
