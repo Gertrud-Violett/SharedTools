@@ -734,7 +734,7 @@ def study_rocket():
                                      gg_base=d11["gg_frac"] * 100, gg_a1=a11["gg_frac"] * 100, Isp_base=[d11["Isp_sl"], d11["Isp_vac"]], Isp_a1=[a11["Isp_sl"], a11["Isp_vac"]])
     f, ax = chart("燃焼圧とターボポンプの動力（海面推力 845 kN）", "燃焼圧 [MPa]", "ターボポンプの動力 [MW]",
                   "推力 845 kN になるように、燃焼圧ごとにスロートとGGの大きさを決め直した計算（時間変化なし）。印は本文の表の4通り。\n教科書の例題の値＝Huzel & Huang の例題エンジンのタービン効率・入口温度、ポンプの吐出圧・効率")
-    ax.axhline(PUB["W_MW"], color=PINK, ls="--", lw=1.8); label(ax, 8.98, PUB["W_MW"] + 0.1, f"公表値 約 {PUB['W_MW']:.1f} MW", color=MUTED, va="bottom", ha="left", size=14)   # 線と重ならない左側に
+    ax.axhline(PUB["W_MW"], color=PINK, ls="--", lw=1.8); label(ax, 9.8, PUB["W_MW"] + 0.1, f"公表値 約 {PUB['W_MW']:.1f} MW", color=MUTED, va="bottom", ha="left", size=14)   # 9.7 MPa の縦線の右、曲線の上の空いた所に
     ax.plot(pcs, Wb, "-", color=LINK, lw=2.8, label="今回の基準（第3回と同じ仮定）")
     ax.plot(pcs, Wa, "--", color=STAR, lw=2.8, label="教科書の例題の値に置き換え")
     for pc, w, c, mk, (dx, dy, ha) in ((PC_2011 / 1e6, d11["W_pump"] / 1e6, LINK, "o", (-0.09, 0.34, "right")), (PC_2011 / 1e6, a11["W_pump"] / 1e6, STAR, "s", (-0.09, 0.34, "right")),
@@ -744,7 +744,7 @@ def study_rocket():
     ax.axvline(PC_2011 / 1e6, color=INK, ls=":", lw=1.4); label(ax, PC_2011 / 1e6 + 0.05, 4.25, f"{PC_2011 / 1e6:.1f} MPa\n（2011年の設計目標）", va="bottom", size=14, color=MUTED)
     ax.axvline(d["Pc"] / 1e6, color=INK, ls=":", lw=1.4); label(ax, d["Pc"] / 1e6 + 0.05, 4.25, f"{d['Pc'] / 1e6:.1f} MPa\n（今回の基準）", va="bottom", size=14, color=MUTED)
     ax.set_xlim(8.9, 14.6); ax.set_ylim(4, 10.5); legend(ax, loc="upper left")
-    save(f, "1dcae2_40_pump_power_pc_v6.png")
+    save(f, "1dcae2_40_pump_power_pc_v7.png")
 
     # ----- 起動の 1 秒と燃焼の 150 秒を 1 本の計算で（主燃焼室の LOX 噴射器が 2 % 渋いとして）
     t0 = time.time()
