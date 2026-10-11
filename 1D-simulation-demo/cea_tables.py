@@ -2,13 +2,13 @@
 cea_tables.py — gg_rocket.py に埋め込んだ「燃焼ガスの特性表」を RocketCEA で作り直すスクリプト（任意）
 RocketCEA（NASA CEA の Python ラッパー）が必要:  pip install rocketcea
   使い方（Windows 編）: https://makkiblog.com/rocketcea_intro/
-出力: 酸燃比 O/F ごとの 断熱火炎温度 T [K]・特性排気速度 c* [m/s]・分子量 M [g/mol]、真空推力係数 CF_vac（LOX/RP-1、燃焼圧 9.7 MPa、開口比 16、化学平衡）と、
+出力: 酸燃比 O/F ごとの 断熱火炎温度 T [K]・特性排気速度 c* [m/s]・分子量 M [g/mol]、真空推力係数 CF_vac（LOX/RP-1、燃焼圧 12.9 MPa、開口比 16、化学平衡）と、
       GG の圧力（燃焼圧の 0.8 倍）での分子量・比熱比（GG のガスの性質の表の、O/F 0.8 以上の部分）
 """
 from rocketcea.cea_obj import CEA_Obj
 
 PSI_PER_BAR = 14.5037738
-PC_BAR, EPS = 97.0, 16.0                      # Merlin 1D 級: 燃焼圧 9.7 MPa、ノズル開口比 16
+PC_BAR, EPS = 129.0, 16.0                     # Merlin 1D 級: 燃焼圧 12.9 MPa（現行型の推定値）、ノズル開口比 16
 GG_PRESSURE_RATIO = 0.8                       # GG の圧力 ÷ 燃焼圧（gg_rocket.DESIGN の k_gg と同じ）
 OFS = [0.8, 1.0, 1.25, 1.5, 1.75, 2.0, 2.2, 2.36, 2.5, 2.8, 3.0, 3.4, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0, 20.0, 30.0, 40.0, 60.0, 100.0]   # gg_rocket.py の _OF_CEA と同じ点
 
@@ -16,8 +16,8 @@ OFS = [0.8, 1.0, 1.25, 1.5, 1.75, 2.0, 2.2, 2.36, 2.5, 2.8, 3.0, 3.4, 4.0, 5.0, 
 def gas_molwt(cea, pc, of, eps=EPS):
     """気体だけの分子量 [g/mol]（＝ 混合物 1 kg ÷ 気体のモル数）と、固体の炭素（すす）の質量分率を返す。
     RocketCEA の get_Chamber_MolWt_gamma が返す分子量は、固体の炭素 C(gr) も気体のモルに数えた値なので、すすが出る O/F（1.0 以下）では
-    小さくなりすぎる（O/F 0.8 で 13.99。気体だけなら 16.59）。固体は圧力を生まないので、ガス定数 R = 8314.46 ÷ M に使う分子量からは除く。
-    水は気体として数える: 表の圧力（7.76 MPa）では O/F 100（351 K）で一部が液体になるが、GG がこの状態を通るのは圧力が下がった停止の終わり"""
+    小さくなりすぎる（O/F 0.8 で 14.14。気体だけなら 16.76）。固体は圧力を生まないので、ガス定数 R = 8314.46 ÷ M に使う分子量からは除く。
+    水は気体として数える: 表の圧力（10.32 MPa）では O/F 100（354 K）で一部が液体になるが、GG がこの状態を通るのは圧力が下がった停止の終わり"""
     mw_d, y_d = cea.get_SpeciesMassFractions(Pc=pc, MR=of, eps=eps, frozen=0, frozenAtThroat=0, min_fraction=1e-7)
     y = {k: float(v[1]) for k, v in y_d.items()}                      # v = [噴射面, 燃焼室, スロート, 出口]。燃焼室の値を使う
     assert abs(sum(y.values()) - 1.0) < 1e-3, f"O/F {of}: 化学種の質量分率の合計が 1 になりません"
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     # 参考: 燃料過剰の GG を化学平衡で計算すると、実機（O/F 0.32 で約 900 K）より高い温度になる。gg_rocket.py が GG の領域に実測ベースの表を使う理由
     print(f"GG（O/F 0.324、{GG_PRESSURE_RATIO * PC_BAR / 10:.2f} MPa）の平衡温度 = {cea.get_Tcomb(Pc=pgg, MR=0.324) / 1.8:.0f} K、"
           f"ノズル出口の圧力比 Pc/Pe（開口比 {EPS:.0f}）= {cea.get_PcOvPe(Pc=pc, MR=2.36, eps=EPS):.1f}、燃焼ガスの音速 = {cea.get_SonicVelocities(Pc=pc, MR=2.36, eps=EPS)[0] * 0.3048:.0f} m/s")
-    # 参考: gg_rocket.py の燃焼温度の表は 9.7 MPa の値だけ。圧力が低いと、高温側は解離が進んで温度が下がる。弁の順番がずれて GG の中が
+    # 参考: gg_rocket.py の燃焼温度の表は 12.9 MPa の値だけ。圧力が低いと、高温側は解離が進んで温度が下がる。弁の順番がずれて GG の中が
     # O/F 3 付近を通るとき、GG の圧力は 1〜4 MPa 程度まで下がっているので、そのときの温度は表の値より低い
     print("O/F 3.0 の燃焼温度: " + "、".join(f"{p:g} MPa で {cea.get_Tcomb(Pc=p * 10 * PSI_PER_BAR, MR=3.0) / 1.8:.0f} K" for p in (1.0, 2.0, 4.0, PC_BAR / 10)))
     # 参考: O/F 0.8 以上の GG のガスの比熱は、gg_rocket.py では比熱比とガス定数から cp = γR/(γ − 1) で計算している。平衡計算の比熱は、

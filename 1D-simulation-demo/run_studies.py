@@ -409,7 +409,7 @@ def study_rocket():
         ax.annotate(f"ピーク {b['rpm_peak']:,.0f} rpm\n（設計の {over0:.1f} % 増し）", (b["t_rpm_peak"], b["rpm_peak"] / 1e3), xytext=(0.74, 27.0), fontsize=15,
                     color=INK, va="center", ha="center", arrowprops=dict(arrowstyle="->", color=INK, lw=1.3, shrinkB=4))
     ax.set_xlim(0, TMAX); ax.set_ylim(0, 48)
-    save(f, "1dcae2_23_gg_start_rpm_v6.png")
+    save(f, "1dcae2_23_gg_start_rpm_v7.png")
 
     f, ax = chart("起動過渡：各部の圧力", "時間 [s]", "圧力 [MPa]", seq)
     seq_marks(ax)
@@ -420,22 +420,22 @@ def study_rocket():
     if Pd_over < 0.05:
         label(ax, TMAX - 0.015, d["Pd"] / 1e6 - 0.5, f"吐出圧は設計値の {d['Pd'] / 1e6:.1f} MPa を超えない", ha="right", va="top", size=15)
     else:
-        ax.annotate(f"吐出圧のピーク {b['Pd_peak']:.1f} MPa\n（設計の {Pd_over:.1f} % 増し）", (float(t[r['Pd_o_MPa'].argmax()]), b["Pd_peak"]), xytext=(0.80, 15.6), fontsize=15, color=INK, va="center", ha="center",
+        ax.annotate(f"吐出圧のピーク {b['Pd_peak']:.1f} MPa\n（設計の {Pd_over:.1f} % 増し）", (float(t[r['Pd_o_MPa'].argmax()]), b["Pd_peak"]), xytext=(0.80, 21.0), fontsize=15, color=INK, va="center", ha="center",
                     arrowprops=dict(arrowstyle="->", color=INK, lw=1.3, shrinkB=6))
-    ax.set_xlim(0, TMAX); ax.set_ylim(0, 19); legend(ax, loc="lower right")
-    save(f, "1dcae2_25_gg_start_pressure_v6.png")
+    ax.set_xlim(0, TMAX); ax.set_ylim(0, 25); legend(ax, loc="lower right")
+    save(f, "1dcae2_25_gg_start_pressure_v7.png")
 
     f, ax = chart("起動過渡：推力", "時間 [s]", "推力 [kN]", seq)
     seq_marks(ax)
     ax.plot(t, r["F_kN"], color=LINK, lw=2.8)
     ax.axhline(845, color=INK, ls=":", lw=1.4); label(ax, TMAX - 0.015, 815, "Merlin 1D の海面推力 845 kN", ha="right", va="top", color=MUTED, size=14)
     ax.set_xlim(0, TMAX); ax.set_ylim(0, 1150); commas(ax)
-    save(f, "1dcae2_26_gg_start_thrust_v6.png")
+    save(f, "1dcae2_26_gg_start_thrust_v7.png")
 
     # ----- 部品の特性の図: 燃焼温度の表、ポンプマップ
     of = np.logspace(np.log10(0.1), np.log10(60), 500)
     f, ax = chart("LOX/ケロシンの燃焼温度と酸燃比（モデルに入れた表）", "酸燃比 O/F（対数目盛）", "燃焼温度 [K]",
-                  "O/F 0.8以上は化学平衡計算（RocketCEA、9.7 MPa）、0.30〜0.52は教科書の代表値（Huzel & Huang, NASA SP-125）。\nそのあいだと0.30より下は、点をつないで補った値。主燃焼室はこの温度に燃焼効率の2乗（約0.95）を掛けて使う")
+                  "O/F 0.8以上は化学平衡計算（RocketCEA、12.9 MPa）、0.30〜0.52は教科書の代表値（Huzel & Huang, NASA SP-125）。\nそのあいだと0.30より下は、点をつないで補った値。主燃焼室はこの温度に燃焼効率の2乗（約0.95）を掛けて使う")
     ax.plot(of, T_AD(of), color=LINK, lw=2.8)
     ax.axhline(T_LIM, color=PINK, ls="--", lw=1.8); label(ax, 4.0, T_LIM - 70, f"タービン入口温度の目安 {T_LIM:,.0f} K", color="#c0569a", ha="center", va="top", size=14)
     ax.plot([d["OF_g"]], [d["T_gg"]], "o", color=STAR, ms=12, mec=INK, mew=1.5, zorder=5)
@@ -447,7 +447,7 @@ def study_rocket():
     label(ax, 24, 3550, "酸素過剰側\nLOXが多いほど冷える", ha="center", va="center", color=MUTED, size=14)
     ax.set_xscale("log"); ax.set_xlim(0.1, 60); ax.set_ylim(0, 4200); commas(ax)
     ax.set_xticks([0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50]); ax.set_xticklabels(["0.1", "0.2", "0.5", "1", "2", "5", "10", "20", "50"]); ax.minorticks_off()
-    save(f, "1dcae2_21_gg_gas_table_v3.png")
+    save(f, "1dcae2_21_gg_gas_table_v4.png")
 
     qn = np.linspace(0, 1.75, 200)
     f, ax = chart("ポンプの特性マップ（設計点を1とした比）", "流量（設計点 = 1）", "揚程・軸動力（設計点 = 1）",
@@ -473,7 +473,7 @@ def study_rocket():
     ax.plot(pct, [g["F_kN"] for g in M], "s--", color=PINK, lw=2.8, ms=9, label="主燃焼室の LOX 噴射器がずれた場合")
     ax.axhline(845, color=INK, ls=":", lw=1.4)
     ax.set_xlim(-22, 22); ax.set_ylim(650, 1100); legend(ax, loc="upper left"); commas(ax)
-    save(f, "1dcae2_27_gg_of_thrust_v6.png")
+    save(f, "1dcae2_27_gg_of_thrust_v7.png")
 
     f, ax = chart("GGのLOXオリフィスが ±20 % ずれたときのGG出口温度", "GG の LOX オリフィスの流れやすさのずれ [%]", "GG出口（タービン入口）温度 [K]",
                   "下の軸はオリフィスのずれ、上の軸はそのときの GG の酸燃比。値は起動後の定常値", h=6.5, top=1.3)
@@ -485,7 +485,7 @@ def study_rocket():
     ax2.set_xlabel("そのときの GG の酸燃比 O/F", fontsize=14, color=MUTED, labelpad=6)
     ax.set_title(ax.get_title(), fontsize=19, fontweight="bold", color=INK, pad=62)
     ax.set_xlim(-22, 22); ax.set_ylim(750, 1260); commas(ax)
-    save(f, "1dcae2_28_gg_of_temp_v6.png")
+    save(f, "1dcae2_28_gg_of_temp_v7.png")
 
     # ----- GG の LOX 弁 先行／遅れ
     lags = np.array([-0.04, -0.03, -0.02, -0.015, -0.01, -0.005, 0.0, 0.005, 0.01, 0.02, 0.03, 0.04])
@@ -509,7 +509,7 @@ def study_rocket():
         ax.plot(hist[k]["t"], hist[k]["T_gg_K"], color=c, lw=2.8, ls=ls, label=lab)
     ax.axhline(T_LIM, color=PINK, ls="--", lw=1.8); label(ax, 0.398, T_LIM + 40, f"タービン入口温度の目安 {T_LIM:,.0f} K", color="#c0569a", ha="right", va="bottom", size=14)
     ax.set_xlim(0.12, 0.40); ax.set_ylim(0, 3600); legend(ax, loc="upper right"); commas(ax)
-    save(f, "1dcae2_29_gg_lead_time_v8.png")
+    save(f, "1dcae2_29_gg_lead_time_v9.png")
 
     f, ax = chart("GGのLOX弁のタイミングと、GG出口温度のピーク", "LOX弁のずれ [ms]（マイナス＝LOXが先、プラス＝燃料が先）", "GG出口温度のピーク [K]",
                   "燃料が先なら温度は設計値のまま。LOXが先だと、燃料が届いた直後のGGは極端な酸素過剰で、\nそこから燃焼温度が最高になる O/F 3 付近を通り抜ける。細い線は、起動前のGGの窒素の量を半分・2倍にした場合")
@@ -520,7 +520,7 @@ def study_rocket():
     ax.axhline(T_LIM, color=PINK, ls="--", lw=1.8); label(ax, 43, T_LIM + 50, f"タービン入口温度の目安 {T_LIM:,.0f} K", color="#c0569a", ha="right", va="bottom", size=14)
     label(ax, -42, 400, "LOX が先", va="center"); label(ax, 42, 400, "燃料が先", ha="right", va="center")
     ax.set_xlim(-45, 45); ax.set_ylim(0, 4200); commas(ax); legend(ax, loc="upper right", fontsize=14)
-    save(f, "1dcae2_30_gg_lead_peak_v8.png")
+    save(f, "1dcae2_30_gg_lead_peak_v9.png")
 
     # ----- 主弁の LOX 先行／遅れ
     mlags = np.round(np.arange(-0.15, 0.151, 0.025), 3)
@@ -542,7 +542,7 @@ def study_rocket():
     ax.axhline(d["OF_c"], color=INK, ls=":", lw=1.4); label(ax, 0.79, d["OF_c"] * 0.86, f"設計 {d['OF_c']:.2f}", color=MUTED, ha="right", va="top", size=14)
     ax.set_yscale("log"); ax.set_ylim(0.5, 12); ax.set_xlim(m0 - 0.02, 0.8)
     ax.set_yticks([0.5, 1, 2, 5, 10]); ax.set_yticklabels(["0.5", "1", "2", "5", "10"]); ax.minorticks_off(); legend(ax, loc="upper right")
-    save(f, "1dcae2_31_main_lead_of_v6.png")
+    save(f, "1dcae2_31_main_lead_of_v7.png")
 
     f, ax = chart("主LOX弁のタイミングと、回転数のピーク", "主LOX弁のずれ [ms]（マイナス＝LOXが先、プラス＝燃料が先）", "回転数のピーク [×1,000 rpm]",
                   "LOXの主弁が遅れるほど、LOXポンプに負荷がかかるのが遅れて回転数のピークが上がる")
@@ -551,7 +551,7 @@ def study_rocket():
     ax.axhline(RPM_D / 1e3, color=INK, ls=":", lw=1.4); label(ax, 155, RPM_D / 1e3 + 0.3, f"設計回転数 {RPM_D:,.0f} rpm", color=MUTED, ha="right", va="bottom", size=14)
     label(ax, -152, 46.2, "LOX が先：酸素過剰を通過", va="center"); label(ax, 152, 34.9, "燃料が先：回転数が上がる", ha="right", va="center")
     ax.set_xlim(-160, 160); ax.set_ylim(34, 47); ax.set_yticks(range(34, 47, 2))
-    save(f, "1dcae2_32_main_lead_rpm_v6.png")
+    save(f, "1dcae2_32_main_lead_rpm_v7.png")
 
     # ----- 主弁の全開時刻 → 回転数のピーク
     t1s = np.round(np.arange(m0 + 0.1, 1.61, 0.1), 2)
@@ -575,7 +575,7 @@ def study_rocket():
     ib = int(np.argmin(abs(t1s - m1)))
     ax.annotate("基準ケース", (t1s[ib], peak[ib] / 1e3), xytext=(0.40, 40.5), fontsize=15, color=INK, va="center", ha="center", arrowprops=dict(arrowstyle="->", color=INK, lw=1.3, shrinkB=7))
     ax.set_xlim(0.24, 1.66); ax.set_ylim(34, 50); ax.set_yticks(range(34, 50, 2))
-    save(f, "1dcae2_33_valve_rpm_v6.png")
+    save(f, "1dcae2_33_valve_rpm_v7.png")
 
     ts = slow["t"]
     f, ax = chart("主弁をゆっくり開いたときの、タービンの出力とポンプの動力", "時間 [s]", "動力 [MW]",
@@ -585,8 +585,8 @@ def study_rocket():
     ax.plot(ts, slow["W_p_MW"], color=PINK, lw=2.8, ls="--", label="ポンプの動力（2台合計）")
     ax.plot(ts, slow["W_spin_MW"], color=INK, lw=2.0, ls=":", label="起動トルクの動力")
     ax.fill_between(ts, slow["W_t_MW"], slow["W_p_MW"], where=slow["W_t_MW"] > slow["W_p_MW"], color=LINK, alpha=0.15, lw=0)
-    ax.set_xlim(0, 1.5); ax.set_ylim(0, 10.5); legend(ax, loc="lower right")
-    save(f, "1dcae2_24_gg_start_power_v6.png")
+    ax.set_xlim(0, 1.5); ax.set_ylim(0, 13.5); legend(ax, loc="lower right")
+    save(f, "1dcae2_24_gg_start_power_v7.png")
 
     # ----- 起動トルク（スピンスタートの強さ。止まっているときの値）→ 回転数のピーク
     tqs = np.array([200.0, 300.0, 400.0, 450.0, 500.0, 600.0, 700.0, 800.0])
@@ -603,11 +603,11 @@ def study_rocket():
     ax.axhline(RPM_D / 1e3, color=INK, ls=":", lw=1.4); label(ax, 835, RPM_D / 1e3 - 0.15, f"設計回転数 {RPM_D:,.0f} rpm", color=MUTED, ha="right", va="top", size=14)
     ib = int(np.argmin(abs(tqs - e0.spin_torque)))
     ax.annotate("基準ケース", (tqs[ib], tpk[ib] / 1e3), xytext=(tqs[ib], 35.15), fontsize=15, color=INK, va="center", ha="center", arrowprops=dict(arrowstyle="->", color=INK, lw=1.3, shrinkB=9))
-    ax.set_xlim(150, 850); ax.set_ylim(34.8, 38.6); ax.set_yticks(np.arange(35, 38.6, 1)); ax.set_xticks(range(200, 801, 100))
-    save(f, "1dcae2_41_spin_torque_v6.png")
+    ax.set_xlim(150, 850); ax.set_ylim(34.8, 40.6); ax.set_yticks(np.arange(35, 40.6, 1)); ax.set_xticks(range(200, 801, 100))
+    save(f, "1dcae2_41_spin_torque_v7.png")
 
     # ----- GG の流量を絞る（スロットリング）
-    ths = np.round(np.arange(0.4, 1.01, 0.1), 2)
+    ths = np.round(np.arange(0.3, 1.01, 0.1), 2)
     TH = [ss_run(A_gg_orifice_scale=float(x)) for x in ths]
     S["gg_throttle"] = dict(scales=ths.tolist(), runs=TH)
     sep = [x for x, g in zip(ths, TH) if g["Pc_MPa"] * 1e6 < b["Pc_sep"]]      # 主ノズルの中で流れがはがれている点
@@ -619,8 +619,8 @@ def study_rocket():
     ax.plot(ths * 100, Fp, "o-", color=LINK, lw=2.8, ms=9)
     for x, y, g in zip(ths * 100, Fp, TH):
         label(ax, x + 1.6, y - 2.0, f"{g['Isp']:.0f} s", color=MUTED, ha="left", va="top", size=14)
-    ax.set_xlim(35, 108); ax.set_ylim(30, 108)
-    save(f, "1dcae2_34_throttle_v6.png")
+    ax.set_xlim(25, 108); ax.set_ylim(20, 108)
+    save(f, "1dcae2_34_throttle_v7.png")
 
     # ----- 停止（シャットダウン）: 起動が落ち着いたあと T_CUT で停止の指令を出し、弁を閉じる順番と速さを変える
     T_CUT = 1.5
@@ -666,7 +666,7 @@ def study_rocket():
         ax.plot(q["tc"], q["F_kN"], color=c, ls=ls, lw=lw, label=f"{x:g} s で閉じる{'（基準）' if q is cb else ''}：力積 {cut_metrics(q)['impulse']:.0f} kN·s")
     ax.axvline(0, color=INK, ls=":", lw=1.4); label(ax, 0.008, 950, "停止の指令", va="center", size=14, color=MUTED)
     ax.set_xlim(-0.05, 0.6); ax.set_ylim(0, 1000); commas(ax); legend(ax, loc="upper right")
-    save(f, "1dcae2_43_cut_thrust_v6.png")
+    save(f, "1dcae2_43_cut_thrust_v7.png")
 
     f, ax = chart("停止過渡：GGの弁を閉じるのが遅れたときの回転数", "停止の指令からの時間 [s]", "回転数 [×1,000 rpm]",
                   "主弁は基準の手順のまま、GGの弁を閉じ始める時刻だけを遅らせた場合。\n主弁が閉じて負荷を失ったポンプを、タービンが回し続ける")
@@ -678,7 +678,7 @@ def study_rocket():
     ax.axhline(RPM_D / 1e3, color=INK, ls=":", lw=1.4); label(ax, 0.59, RPM_D / 1e3 + 0.5, f"設計回転数 {RPM_D:,.0f} rpm", ha="right", va="bottom", color=MUTED, size=14)
     ax.axvline(0, color=INK, ls=":", lw=1.4); label(ax, 0.008, 56.5, "停止の指令", va="center", size=14, color=MUTED)
     ax.set_xlim(-0.05, 0.6); ax.set_ylim(0, 60); legend(ax, loc="lower left")
-    save(f, "1dcae2_44_cut_rpm_v6.png")
+    save(f, "1dcae2_44_cut_rpm_v7.png")
 
     Tcl = S["gg_cut"]["lag_T_peak"]
     f, ax = chart("GGの弁を閉じる順番と、GG出口温度のピーク", "LOX弁のずれ [ms]（マイナス＝LOXが先に閉じる、プラス＝燃料が先に閉じる）", "GG出口温度のピーク [K]",
@@ -690,7 +690,7 @@ def study_rocket():
     ax.annotate("基準ケース", (clags[ib] * 1e3, Tcl[ib]), xytext=(clags[ib] * 1e3, 330), fontsize=15, color=INK, va="center", ha="center", arrowprops=dict(arrowstyle="->", color=INK, lw=1.3, shrinkB=7))
     label(ax, -42, 3900, "LOX が先", va="center"); label(ax, 42, 400, "燃料が先", ha="right", va="center")
     ax.set_xlim(-45, 45); ax.set_ylim(0, 4200); commas(ax)
-    save(f, "1dcae2_45_cut_gg_temp_v8.png")
+    save(f, "1dcae2_45_cut_gg_temp_v9.png")
 
     # ----- 設計の仮定を振る（時間変化なしの計算）: タービン効率 → GG 流量と比推力
     ets = np.round(np.arange(0.35, 0.701, 0.05), 2)
@@ -707,41 +707,44 @@ def study_rocket():
                                   D_t=h2["D_t"], OF_engine=h2["OF_engine"], OF_g=h2["OF_g"], Pd_o=h2["Pd_o"], Pd_f=h2["Pd_f"], **HH_A1),
                           base=dict(Isp_sl=d["Isp_sl"], Isp_vac=d["Isp_vac"], W_MW=d["W_pump"] / 1e6, gg=d["gg_frac"] * 100, m_tot=d["m_c"] + d["m_g"]), pub=PUB)
     f, ax = chart("タービン効率の仮定と、エンジンの比推力", "GGタービンの効率 [%]", "海面比推力 [s]",
-                  "推力 845 kN・燃焼圧 9.7 MPa になるように、効率ごとにGGの大きさを決め直した計算（時間変化なし）。\n下に並べた数字は、そのときGGに回す推進剤の割合")
+                  "推力 845 kN・燃焼圧 12.9 MPa になるように、効率ごとにGGの大きさを決め直した計算（時間変化なし）。\n下に並べた数字は、そのときGGに回す推進剤の割合")
     ax.plot(ets * 100, [x["Isp_sl"] for x in DS], "o-", color=LINK, lw=2.8, ms=9)
     for e, x in zip(ets * 100, DS):
-        label(ax, e, 272.45, f"{x['gg_frac'] * 100:.1f} %", color=MUTED, ha="center", va="bottom", size=14)
-    ax.axhline(282, color=PINK, ls="--", lw=1.8); label(ax, 35.5, 282.25, "Merlin 1D の公表値 282 s", color="#c0569a", va="bottom", size=14)
+        label(ax, e, 275.45, f"{x['gg_frac'] * 100:.1f} %", color=MUTED, ha="center", va="bottom", size=14)
+    ax.axhline(282, color=PINK, ls="--", lw=1.8); label(ax, 73.5, 281.75, "Merlin 1D の公表値 282 s", color="#c0569a", va="top", ha="right", size=14)
     ax.plot([45], [d["Isp_sl"]], "o", color=STAR, ms=13, mec=INK, mew=1.5, zorder=5)
-    ax.annotate("今回の基準\n（第3回と同じ 45 %）", (45, d["Isp_sl"]), xytext=(40.5, 280.4), fontsize=15, color=INK, va="center", ha="center", arrowprops=dict(arrowstyle="->", color=INK, lw=1.3, shrinkB=8))
-    ax.set_xlim(33, 74); ax.set_ylim(272, 285)
-    save(f, "1dcae2_35_turbine_eta_v3.png")
+    ax.annotate("今回の基準\n（第3回と同じ 45 %）", (45, d["Isp_sl"]), xytext=(40.5, 285.6), fontsize=15, color=INK, va="center", ha="center", arrowprops=dict(arrowstyle="->", color=INK, lw=1.3, shrinkB=8))
+    ax.set_xlim(33, 74); ax.set_ylim(275, 290)
+    save(f, "1dcae2_35_turbine_eta_v4.png")
 
-    # ----- ターボポンプの動力と燃焼圧: 海面推力 845 kN・真空推力 914 kN の組から、現行型の燃焼圧を逆算する
-    F_VAC_PUB, D_ENG_PUB = 914e3, 0.92                                   # 公表値: 真空推力、エンジンの直径（Wikipedia）
-    Pc_inf = bisect(lambda pc: design_point(Pc=pc)["F_vac"] - F_VAC_PUB, 9e6, 16e6)   # 真空推力が 914 kN になる燃焼圧（開口比 16 のまま）
-    di, da = design_point(Pc=Pc_inf), design_point(Pc=Pc_inf, **HH_A1)
-    pc_hi = math.ceil(Pc_inf / 1e6) + 0.5                                  # 逆算した燃焼圧まで入る横軸の範囲 [MPa]
-    pcs = np.arange(9.0, pc_hi + 0.01, 0.25)
+    # ----- ターボポンプの動力と燃焼圧: 基準（12.9 MPa。現行型の推定値）と、2011 年に公表された設計値（9.7 MPa）を比べる
+    F_VAC_PUB, D_ENG_PUB, PC_2011 = 914e3, 0.92, 9.7e6                    # 公表値: 真空推力、エンジンの直径（Wikipedia）、2011 年の設計値の燃焼圧
+    Pc_inf = bisect(lambda pc: design_point(Pc=pc)["F_vac"] - F_VAC_PUB, 9e6, 16e6)   # 海面 845 kN のとき真空推力が 914 kN になる燃焼圧（開口比 16 のまま）
+    di = design_point(Pc=Pc_inf)
+    GAS_2011 = dict(cstar=1814.0, cf_vac=1.823)                             # 9.7 MPa での c* と真空推力係数（RocketCEA。gg_rocket.py の表は 12.9 MPa の値なので、この 2 つは渡す）
+    d11, a11 = design_point(Pc=PC_2011, **GAS_2011), design_point(Pc=PC_2011, **GAS_2011, **HH_A1)  # 2011 年の燃焼圧のまま、海面 845 kN を出すとした場合
+    D_e = lambda x: 2 * math.sqrt(x["A_e"] / math.pi)                      # 主ノズルの出口の直径 [m]
+    pcs = np.arange(9.0, 14.51, 0.25)
     Wb = [design_point(Pc=x * 1e6)["W_pump"] / 1e6 for x in pcs]
     Wa = [design_point(Pc=x * 1e6, **HH_A1)["W_pump"] / 1e6 for x in pcs]
-    S["gg_assume"]["pc_inferred"] = dict(Pc=Pc_inf, D_t=di["D_t"], D_e=2 * math.sqrt(di["A_e"] / math.pi), dF=F_VAC_PUB - d["F_sl"], F_vac_base=d["F_vac"],
-                                         D_e_base=2 * math.sqrt(d["A_e"] / math.pi), W_base=di["W_pump"] / 1e6, W_a1=da["W_pump"] / 1e6, gg_base=di["gg_frac"] * 100, gg_a1=da["gg_frac"] * 100,
-                                         Isp_base=[di["Isp_sl"], di["Isp_vac"]], Isp_a1=[da["Isp_sl"], da["Isp_vac"]], F_vac_pub=F_VAC_PUB, D_eng_pub=D_ENG_PUB,
-                                         Pc_min_D_eng=bisect(lambda pc: 2 * math.sqrt(design_point(Pc=pc)["A_e"] / math.pi) - D_ENG_PUB, 9e6, 16e6))   # ノズル出口がエンジンの直径に収まる最低の燃焼圧
+    S["gg_assume"]["pc_inferred"] = dict(Pc=Pc_inf, D_t=di["D_t"], D_e=D_e(di), dF=F_VAC_PUB - d["F_sl"], F_vac_base=d["F_vac"], D_e_base=D_e(d), F_vac_a1=h2["F_vac"],
+                                         F_vac_pub=F_VAC_PUB, D_eng_pub=D_ENG_PUB,
+                                         Pc_min_D_eng=bisect(lambda pc: D_e(design_point(Pc=pc)) - D_ENG_PUB, 9e6, 16e6))   # ノズル出口がエンジンの直径に収まる最低の燃焼圧
+    S["gg_assume"]["pc_2011"] = dict(Pc=PC_2011, D_t=d11["D_t"], D_e=D_e(d11), F_vac=d11["F_vac"], W_base=d11["W_pump"] / 1e6, W_a1=a11["W_pump"] / 1e6,
+                                     gg_base=d11["gg_frac"] * 100, gg_a1=a11["gg_frac"] * 100, Isp_base=[d11["Isp_sl"], d11["Isp_vac"]], Isp_a1=[a11["Isp_sl"], a11["Isp_vac"]])
     f, ax = chart("燃焼圧とターボポンプの動力（海面推力 845 kN）", "燃焼圧 [MPa]", "ターボポンプの動力 [MW]",
                   "推力 845 kN になるように、燃焼圧ごとにスロートとGGの大きさを決め直した計算（時間変化なし）。印は本文の表の4通り。\n教科書の例題の値＝Huzel & Huang の例題エンジンのタービン効率・入口温度、ポンプの吐出圧・効率")
     ax.axhline(PUB["W_MW"], color=PINK, ls="--", lw=1.8); label(ax, 8.98, PUB["W_MW"] + 0.1, f"公表値 約 {PUB['W_MW']:.1f} MW", color=MUTED, va="bottom", ha="left", size=14)   # 線と重ならない左側に
     ax.plot(pcs, Wb, "-", color=LINK, lw=2.8, label="今回の基準（第3回と同じ仮定）")
     ax.plot(pcs, Wa, "--", color=STAR, lw=2.8, label="教科書の例題の値に置き換え")
-    for pc, w, c, mk, (dx, dy, ha) in ((9.7, d["W_pump"] / 1e6, LINK, "o", (-0.09, 0.34, "right")), (9.7, h2["W_pump"] / 1e6, STAR, "s", (-0.09, 0.34, "right")),
-                                     (Pc_inf / 1e6, di["W_pump"] / 1e6, LINK, "o", (0.09, -0.34, "left")), (Pc_inf / 1e6, da["W_pump"] / 1e6, STAR, "s", (-0.09, 0.34, "right"))):
+    for pc, w, c, mk, (dx, dy, ha) in ((PC_2011 / 1e6, d11["W_pump"] / 1e6, LINK, "o", (-0.09, 0.34, "right")), (PC_2011 / 1e6, a11["W_pump"] / 1e6, STAR, "s", (-0.09, 0.34, "right")),
+                                     (d["Pc"] / 1e6, d["W_pump"] / 1e6, LINK, "o", (0.09, -0.34, "left")), (d["Pc"] / 1e6, h2["W_pump"] / 1e6, STAR, "s", (-0.09, 0.34, "right"))):
         ax.plot([pc], [w], mk, color=c, ms=12, mec=INK, mew=1.5, zorder=5)      # 本文の表に載せた4通り
         label(ax, pc + dx, w + dy, f"{w:.1f} MW", ha=ha, va="center", size=15)
-    ax.axvline(9.7, color=INK, ls=":", lw=1.4); label(ax, 9.75, 4.25, "9.7 MPa\n（2011年の設計目標）", va="bottom", size=14, color=MUTED)
-    ax.axvline(Pc_inf / 1e6, color=INK, ls=":", lw=1.4); label(ax, Pc_inf / 1e6 - 0.05, 4.25, f"約 {Pc_inf / 1e6:.0f} MPa\n（推力から逆算）", va="bottom", ha="right", size=14, color=MUTED)
-    ax.set_xlim(8.9, pc_hi + 0.1); ax.set_ylim(4, 10.5); legend(ax, loc="upper left")
-    save(f, "1dcae2_40_pump_power_pc_v5.png")
+    ax.axvline(PC_2011 / 1e6, color=INK, ls=":", lw=1.4); label(ax, PC_2011 / 1e6 + 0.05, 4.25, f"{PC_2011 / 1e6:.1f} MPa\n（2011年の設計目標）", va="bottom", size=14, color=MUTED)
+    ax.axvline(d["Pc"] / 1e6, color=INK, ls=":", lw=1.4); label(ax, d["Pc"] / 1e6 + 0.05, 4.25, f"{d['Pc'] / 1e6:.1f} MPa\n（今回の基準）", va="bottom", size=14, color=MUTED)
+    ax.set_xlim(8.9, 14.6); ax.set_ylim(4, 10.5); legend(ax, loc="upper left")
+    save(f, "1dcae2_40_pump_power_pc_v6.png")
 
     # ----- 起動の 1 秒と燃焼の 150 秒を 1 本の計算で（主燃焼室の LOX 噴射器が 2 % 渋いとして）
     t0 = time.time()
@@ -763,7 +766,7 @@ def study_rocket():
                 arrowprops=dict(arrowstyle="->", color=INK, lw=1.3, shrinkB=4))
     ax.set_xscale("log"); ax.set_xlim(0.1, 250); ax.set_ylim(0, 1000); commas(ax)
     ax.set_xticks([0.1, 1, 10, 100]); ax.set_xticklabels(["0.1", "1", "10", "100"])
-    save(f, "1dcae2_36_burn_thrust_v6.png")
+    save(f, "1dcae2_36_burn_thrust_v7.png")
 
     f, ax = chart("タンクの残量：どちらが先に尽きるか", "時間 [s]", "タンクの推進剤 [t]",
                   "150秒分の推進剤を、設計どおりの比率で積んだ場合。主燃焼室のLOX噴射器が設計より 2 % 流れにくいと仮定")
@@ -775,7 +778,7 @@ def study_rocket():
     ax.annotate(f"{who}\n{rest}が約 {left:,.0f} kg 残る", (tb[-1], left / 1e3), xytext=(118, 12.5), fontsize=15, color=INK, va="center", ha="center",
                 arrowprops=dict(arrowstyle="->", color=INK, lw=1.3, shrinkB=5))
     ax.set_xlim(0, 160); ax.set_ylim(0, 34); legend(ax, loc="upper right")
-    save(f, "1dcae2_37_burn_tank_v6.png")
+    save(f, "1dcae2_37_burn_tank_v7.png")
 
     # ----- 時間刻みと積分法（うまくいかない話）
     eng = GGEngine()
@@ -846,9 +849,9 @@ def study_rocket():
         q, diverged, stopped = runs[m]
         ax.plot(q["t"], q["Pc_MPa"], color=cols[m], lw=lw, zorder=z, label=names[m] + ("（発散）" if diverged else ""))
         if stopped is not None:
-            ax.plot([q["t"][-1]], [min(max(q["Pc_MPa"][-1], 0.4), 19.5)], "x", color=cols[m], ms=14, mew=3.5, zorder=6, clip_on=False)
-    ax.set_xlim(0.25, 0.55); ax.set_ylim(0, 20); ax.set_yticks(range(0, 21, 5)); legend(ax, loc="upper left")
-    save(f, "1dcae2_38_int_time_v6.png")
+            ax.plot([q["t"][-1]], [min(max(q["Pc_MPa"][-1], 0.4), 33.3)], "x", color=cols[m], ms=14, mew=3.5, zorder=6, clip_on=False)
+    ax.set_xlim(0.25, 0.55); ax.set_ylim(0, 34); ax.set_yticks(range(0, 31, 5)); legend(ax, loc="upper left")
+    save(f, "1dcae2_38_int_time_v7.png")
 
     f, ax = chart("時間刻みと計算誤差", "時間刻み Δt [ms]（対数目盛）", "燃焼室圧の最大誤差 [MPa]（対数目盛）",
                   "基準は時間刻み 0.02 ms の4段ルンゲ＝クッタ法。×は発散（誤差 1 MPa 以上）。縦の点線は、安定限界の見積もり。\n斜めの破線は、誤差が時間刻みに比例する場合（1次の精度）と、2乗に比例する場合（2次の精度）の傾き")
@@ -869,7 +872,7 @@ def study_rocket():
     label(ax, 3.9, 0.33, "× ＝ 発散", ha="right", va="center", size=14)
     ax.set_xscale("log"); ax.set_yscale("log"); ax.set_ylim(1e-5, 10.0); ax.set_xlim(0.17, 4.2)
     ax.set_xticks([0.2, 0.5, 1.0, 2.0, 3.0]); ax.set_xticklabels(["0.2", "0.5", "1", "2", "3"]); ax.minorticks_off(); legend(ax, loc="upper left")
-    save(f, "1dcae2_39_int_error_v6.png")
+    save(f, "1dcae2_39_int_error_v7.png")
 
 
 if __name__ == "__main__":

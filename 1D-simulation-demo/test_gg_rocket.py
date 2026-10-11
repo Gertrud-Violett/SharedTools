@@ -61,21 +61,21 @@ def test_gg_gas_properties_inside_the_textbook_table_are_the_textbook_values():
 
 
 def test_gg_gas_properties_beyond_the_textbook_table_follow_the_equilibrium_values():
-    """教科書の表より上の O/F では、端の値のままにせず、化学平衡計算の分子量と比熱比を使う（O/F 3 で分子量 24.75、比熱比 1.132）"""
+    """教科書の表より上の O/F では、端の値のままにせず、化学平衡計算の分子量と比熱比を使う（O/F 3 で分子量 24.86、比熱比 1.133）"""
     cp, gam, R = gg_gas(3.0 / 4.0)
-    assert R == pytest.approx(8314.46 / 24.75, rel=1e-6) and gam == pytest.approx(1.132, abs=1e-6)
+    assert R == pytest.approx(8314.46 / 24.86, rel=1e-6) and gam == pytest.approx(1.133, abs=1e-6)
     assert cp == pytest.approx(gam * R / (gam - 1), rel=1e-12)
 
 
 def test_gg_gas_constant_counts_only_the_gas_where_soot_forms():
     """O/F 0.8 と 1.0 では、化学平衡計算の組成に固体の炭素（すす）が 13% と 5% 含まれる。固体は圧力を生まないので、ガス定数は
-    「混合物 1 kg あたりの気体のモル数」から求める（分子量 16.59 と 15.93）。固体まで気体のモルに数えた値（13.99 と 14.98）ではない"""
-    for of, m_gas, m_all in ((0.8, 16.59, 13.99), (1.0, 15.93, 14.98)):
+    「混合物 1 kg あたりの気体のモル数」から求める（分子量 16.76 と 16.05）。固体まで気体のモルに数えた値（14.14 と 15.12）ではない"""
+    for of, m_gas, m_all in ((0.8, 16.76, 14.14), (1.0, 16.05, 15.12)):
         cp, gam, R = gg_gas(of / (1 + of))
         assert R == pytest.approx(8314.46 / m_gas, rel=1e-6)
         assert R < 8314.46 / m_all * 0.95                           # 固体を気体に数えると、ガス定数を 6〜19% 大きく見積もる
         assert cp == pytest.approx(gam * R / (gam - 1), rel=1e-12)
-    assert gg_gas(1.25 / 2.25)[2] == pytest.approx(8314.46 / 15.97, rel=1e-6)   # O/F 1.25 から上は固体がなく、値は変わらない
+    assert gg_gas(1.25 / 2.25)[2] == pytest.approx(8314.46 / 15.98, rel=1e-6)   # O/F 1.25 から上は固体がなく、値は変わらない
 
 
 def test_gg_gas_at_the_oxygen_end_is_nearly_oxygen():
@@ -108,6 +108,9 @@ def test_embedded_combustion_tables_match_rocketcea():
     for of, cf in zip(gg_rocket.CF_VAC.x, gg_rocket.CF_VAC.y):
         ivac, cstar_ft, _ = cea.get_IvacCstrTc(Pc=pc, MR=float(of), eps=cea_tables.EPS)
         assert cf == pytest.approx(ivac * 9.80665 / (cstar_ft * 0.3048), abs=5.1e-4)
+    mw_c, _ = cea.get_Chamber_MolWt_gamma(Pc=pc, MR=D["OF_c"], eps=cea_tables.EPS)        # 主燃焼室のガス定数（O/F 2.36 では固体が出ないので、返る分子量をそのまま使える）
+    assert GGEngine().R_c == pytest.approx(8314.46 / mw_c, rel=5e-4)
+    assert 1.0 / GGEngine().pr_exit == pytest.approx(cea.get_PcOvPe(Pc=pc, MR=D["OF_c"], eps=cea_tables.EPS), rel=2e-3)   # 膨張の比熱比 GAMMA_NOZ は、この圧力比に合わせた値
 
 
 # ----------------------------------------------------------------------------- タービンの効率マップ
@@ -145,10 +148,10 @@ def base():
 
 def test_old_start_sequence_regression():
     """主弁を 0.3〜0.9 s で開く以前の手順の結果が、意図せず変わっていないことの確認（回帰テスト）。
-    値は、起動トルクが回転数とともに下がる版（2026-10）で計算したもの。モデルの式を変えたら、確かめたうえで更新する"""
+    値は、燃焼圧 12.9 MPa・起動トルク 300 N·m の版（2026-10）で計算したもの。モデルの式を変えたら、確かめたうえで更新する"""
     r = run(3.0, main_valve_t=(0.30, 0.90))
-    assert r["rpm"].max() == pytest.approx(44967.94248662225, rel=1e-9)
-    assert r["Pd_o_MPa"].max() == pytest.approx(24.594729271064736, rel=1e-9)
+    assert r["rpm"].max() == pytest.approx(45195.993726449815, rel=1e-9)
+    assert r["Pd_o_MPa"].max() == pytest.approx(33.2224621947248, rel=1e-9)
     assert r["t"][np.argmax(r["F_kN"] > 0.9 * r["F_kN"][-1])] == pytest.approx(0.586, abs=1e-9)
 
 
@@ -180,7 +183,7 @@ def test_base_start_time_to_90_percent_thrust_does_not_depend_on_the_recording_i
     t_coarse = crossing_time(base["t"], base["F_kN"], 0.9 * F_D)
     t_fine = crossing_time(fine["t"], fine["F_kN"], 0.9 * F_D)
     assert t_coarse == pytest.approx(t_fine, abs=2e-5)
-    assert 0.4537 < t_fine < 0.4547
+    assert 0.4594 < t_fine < 0.4604
 
 
 def test_base_start_keeps_gg_temperature_near_design(base):
@@ -377,13 +380,13 @@ def test_nitrogen_in_the_gg_is_conserved_until_gas_starts_to_leave_through_the_t
 
 def test_gg_temperature_with_nitrogen_left_is_the_constant_pressure_mixing_temperature():
     """窒素が質量で 30 % 残っている GG（推進剤からできたガスは O/F 3）。混ぜる前後でエンタルピー（質量 × cp × T）の合計が同じになる温度で、
-    質量の割合で平均した温度（2,720.6 K）ではない。O/F 3 のガスは、表の比熱比 1.132・分子量 24.75・燃焼温度 3,758 K"""
+    質量の割合で平均した温度（2,752.1 K）ではない。O/F 3 のガスは、表の比熱比 1.133・分子量 24.86・燃焼温度 3,803 K"""
     eng = GGEngine()
     g = eng.gg_state(dict(m_gg=0.05, mi_gg=0.015, mo_gg=0.02625))
-    cp_p = 1.132 * (8314.46 / 24.75) / 0.132
-    cp, R = 0.7 * cp_p + 0.3 * 1150.0, 0.7 * 8314.46 / 24.75 + 0.3 * 296.8
-    T = (0.7 * cp_p * 3758.0 + 0.3 * 1150.0 * 300.0) / cp
-    assert T == pytest.approx(3252.8, abs=0.1) and T - (0.7 * 3758.0 + 0.3 * 300.0) > 500.0
+    cp_p = 1.133 * (8314.46 / 24.86) / 0.133
+    cp, R = 0.7 * cp_p + 0.3 * 1150.0, 0.7 * 8314.46 / 24.86 + 0.3 * 296.8
+    T = (0.7 * cp_p * 3803.0 + 0.3 * 1150.0 * 300.0) / cp
+    assert T == pytest.approx(3286.4, abs=0.1) and T - (0.7 * 3803.0 + 0.3 * 300.0) > 500.0
     assert g["Y"] == pytest.approx(0.75, rel=1e-12) and g["cp"] == pytest.approx(cp, rel=1e-9) and g["T"] == pytest.approx(T, rel=1e-9)
     assert g["R"] == pytest.approx(R, rel=1e-9) and g["gam"] == pytest.approx(cp / (cp - R), rel=1e-9)
     assert g["P"] == pytest.approx(0.05 * R * T / eng.V_gg, rel=1e-9)
@@ -465,9 +468,18 @@ def test_gas_mass_is_conserved_in_both_volumes_when_the_gg_mixture_ratio_swings(
 def test_vacuum_thrust_adds_the_back_pressure_on_both_the_nozzle_and_the_turbine_exhaust():
     """真空では、主ノズルとタービン排気の出口の両方で、大気圧が押し返していた分だけ推力が増える"""
     assert D["A_exh"] > 0.0
-    # 排気ノズルの出口面積の手計算: 出口温度 784.29 K → 大気圧まで膨張して 736.7 K、流速 504.7 m/s、密度 0.5583 kg/m3、流量 17.544 kg/s → 0.06227 m2
-    assert D["A_exh"] == pytest.approx(0.06227, rel=2e-3)
+    # 排気ノズルの出口面積の手計算: 出口温度 776.80 K → 大気圧まで膨張して 729.7 K、流速 502.3 m/s、密度 0.5636 kg/m3、流量 21.814 kg/s → 0.07705 m2
+    assert D["A_exh"] == pytest.approx(0.07705, rel=2e-3)
     assert D["F_vac"] - D["F_sl"] == pytest.approx(P_ATM * (D["A_e"] + D["A_exh"]), rel=1e-12)
+
+
+def test_design_point_at_another_chamber_pressure_can_take_the_gas_values_for_that_pressure():
+    """燃焼ガスの表は 12.9 MPa の値。9.7 MPa での c*（1,814 m/s）と真空推力係数（1.823）を渡すと、表が 9.7 MPa の値だった版（2026-10-10）の
+    設計計算をそのまま再現する（海面比推力 278.42 s、真空 308.94 s、スロート径 26.03 cm）。渡さなければ、12.9 MPa の表の値で計算する"""
+    d = design_point(Pc=9.7e6, cstar=1814.0, cf_vac=1.823)
+    assert d["Isp_sl"] == pytest.approx(278.42429299291484, rel=1e-9) and d["Isp_vac"] == pytest.approx(308.93735265609615, rel=1e-9) and d["D_t"] == pytest.approx(0.26033487047240195, rel=1e-9)
+    same_tables = design_point(Pc=9.7e6)
+    assert same_tables["Isp_sl"] == pytest.approx(d["Isp_sl"], rel=1e-3) and same_tables["Isp_sl"] != d["Isp_sl"]
 
 
 def test_design_calculation_refuses_a_chamber_pressure_at_which_the_nozzle_flow_would_separate():
@@ -525,13 +537,13 @@ def test_nozzle_relations_reproduce_the_textbook_isentropic_table(M, pr, eps):
     assert cf == pytest.approx(pr * eps * (1 + 1.4 * M * M), rel=2e-4)
 
 
-SEPARATED = [(5e6, 1.48140, 0.9626), (3e6, 1.39633, 0.9563), (1e6, 1.16718, 0.9357), (0.5e6, 0.97495, 0.9137), (0.2e6, 0.61755, 0.8616)]
+SEPARATED = [(5e6, 1.47938, 0.9627), (3e6, 1.39462, 0.9564), (1e6, 1.16608, 0.9359), (0.5e6, 0.97418, 0.9138), (0.2e6, 0.61707, 0.8617)]
 
 
 @pytest.mark.parametrize("Pc, cf_ref, ratio_ref", SEPARATED)
 def test_separated_thrust_is_the_nozzle_cut_at_the_separation_section_with_ambient_pressure_behind_it(Pc, cf_ref, ratio_ref):
     """はがれたときの推力 =（はがれる断面で切ったノズルの真空推力）−（大気圧 × その断面の面積）。
-    cf_ref は F ÷（Pc At）、ratio_ref は「大気圧までちょうど膨張させたノズル」の推力に対する比（どちらもレビューで別に計算した値）。
+    cf_ref は F ÷（Pc At）、ratio_ref は「大気圧までちょうど膨張させたノズル」の推力に対する比（どちらも、モデルの関数を使わずに別に計算した値。膨張の比熱比 1.185、設計点の推力係数 0.98 × 1.820）。
     はがれる目安が大気圧の 0.4 倍なので、ちょうど膨張させたノズルより推力は小さい"""
     eng = GGEngine()
     cf_design = eng.d["eta_cf"] * float(gg_rocket.CF_VAC(D["OF_c"])) / gg_rocket.nozzle(eng.pr_exit)[1]   # 表の推力係数 ÷ 理想気体の式の値
@@ -543,11 +555,11 @@ def test_separated_thrust_is_the_nozzle_cut_at_the_separation_section_with_ambie
 
 
 def test_main_thrust_rises_steadily_with_chamber_pressure_through_the_separation_onset():
-    """燃焼圧を大気圧から 12 MPa まで上げていくと、推力は途中で下がることなく増え続ける（はく離の始まる 5.67 MPa にも段差がない）"""
+    """燃焼圧を大気圧から 14 MPa まで上げていくと、推力は途中で下がることなく増え続ける（はく離の始まる 5.71 MPa にも段差がない）"""
     eng = GGEngine()
-    assert 139.0 < 1.0 / eng.pr_exit < 141.0                            # 開口比 16 の圧力比 Pc/Pe（化学平衡計算では 139.8）
-    assert gg_rocket.K_SEP * P_ATM / eng.pr_exit == pytest.approx(5.674e6, rel=1e-3)
-    Pc = np.linspace(1.001 * P_ATM, 12e6, 6001)
+    assert 140.4 < 1.0 / eng.pr_exit < 141.4                            # 開口比 16 の圧力比 Pc/Pe（化学平衡計算では 140.9）
+    assert gg_rocket.K_SEP * P_ATM / eng.pr_exit == pytest.approx(5.710e6, rel=1e-3)
+    Pc = np.linspace(1.001 * P_ATM, 14e6, 7001)
     F = np.array([eng.main_thrust(float(p), D["OF_c"]) for p in Pc])
     assert np.all(np.diff(F) > 0.0)
 
