@@ -5,154 +5,154 @@
   "tree": {
     "id": "root",
     "name": "冷却水が止まる",
-    "type": "Gate",
-    "logicGate": "OR",
+    "type": "Root",
+    "logicGate": "AND",
     "probability": 1.0,
-    "notes": "単一故障点と独立故障の組合せのOR",
+    "notes": "",
     "links": [],
     "children": [
       {
-        "id": "indep_overlap",
-        "name": "常用・予備の独立故障が重なる",
+        "id": "root_0",
+        "name": "常用ポンプが止まる",
         "type": "Gate",
+        "logicGate": "OR",
         "probability": 1.0,
-        "calculatedProbability": 2.45529170695e-05,
-        "logicGate": "AND",
-        "notes": "共通要因（ブレーカ等）を除いた独立故障の組合せ",
+        "notes": "常用ポンプ停止の要因をORで集約",
+        "links": [],
         "children": [
           {
-            "id": "root_0",
-            "name": "常用ポンプが止まる",
-            "type": "Gate",
+            "id": "root_0_0",
+            "name": "常用ポンプの故障",
+            "type": "Event",
             "logicGate": "OR",
-            "probability": 1.0,
-            "notes": "常用系固有の要因",
+            "probability": 0.00137,
+            "notes": "",
             "links": [],
-            "children": [
-              {
-                "id": "root_0_0",
-                "name": "常用ポンプの故障",
-                "type": "Event",
-                "logicGate": "OR",
-                "probability": 0.00137,
-                "notes": "",
-                "links": [],
-                "children": [],
-                "calculatedProbability": 0.00137
-              }
-            ],
+            "children": [],
             "calculatedProbability": 0.00137
           },
           {
-            "id": "root_1",
-            "name": "予備が引き継げない",
-            "type": "Gate",
+            "id": "root_0_1",
+            "name": "ブレーカが落ちる",
+            "type": "Event",
             "logicGate": "OR",
-            "probability": 1.0,
-            "notes": "予備系固有の要因のみ。共通電源はroot直下で扱う",
-            "links": [
-              {
-                "target_id": "root_0_1",
-                "relation": "OR"
-              }
-            ],
-            "children": [
-              {
-                "id": "root_1_0",
-                "name": "予備ポンプの故障",
-                "type": "Event",
-                "logicGate": "OR",
-                "probability": 0.00833,
-                "notes": "",
-                "links": [],
-                "children": [],
-                "calculatedProbability": 0.00833
-              },
-              {
-                "id": "root_1_1",
-                "name": "自動切替の失敗",
-                "type": "Event",
-                "logicGate": "OR",
-                "probability": 0.00417,
-                "notes": "",
-                "links": [],
-                "children": [],
-                "calculatedProbability": 0.00417
-              },
-              {
-                "id": "root_1_2",
-                "name": "予備ポンプが整備中",
-                "type": "Event",
-                "logicGate": "OR",
-                "probability": 0.00548,
-                "notes": "",
-                "links": [],
-                "children": [],
-                "calculatedProbability": 0.00548
-              }
-            ],
-            "calculatedProbability": 0.017921837277
+            "probability": 4.57e-05,
+            "notes": "",
+            "links": [],
+            "children": [],
+            "calculatedProbability": 4.57e-05
+          },
+          {
+            "id": "pump_ccf",
+            "name": "ポンプ共通原因故障",
+            "type": "Event",
+            "probability": 6.85e-05,
+            "calculatedProbability": 6.85e-05,
+            "logicGate": "",
+            "notes": "βファクタ法 β=0.05（一般値0.05〜0.1）。同一設計・同一保守・同一水質による同時故障。root_1からORリンクで共有",
+            "children": [],
+            "links": []
+          },
+          {
+            "id": "common_suction_failure",
+            "name": "共通吸込み系統の閉塞・漏えい",
+            "type": "Event",
+            "probability": 0.0001,
+            "calculatedProbability": 0.0001,
+            "logicGate": "",
+            "notes": "ストレーナ閉塞、共通配管漏えい、共通弁誤閉止。暫定値。水質・点検頻度に応じて要見直し。root_1からORリンクで共有",
+            "children": [],
+            "links": []
+          },
+          {
+            "id": "water_source_loss",
+            "name": "水源喪失（タンク水位低下）",
+            "type": "Event",
+            "probability": 5e-05,
+            "calculatedProbability": 5e-05,
+            "logicGate": "",
+            "notes": "補給失敗・水位計故障などを含む。暫定値。root_1からORリンクで共有",
+            "children": [],
+            "links": []
           }
         ],
-        "links": []
+        "calculatedProbability": 0.0016338128212
       },
       {
-        "id": "root_0_1",
-        "name": "ブレーカが落ちる",
-        "type": "Event",
+        "id": "root_1",
+        "name": "予備が引き継げない",
+        "type": "Gate",
         "logicGate": "OR",
-        "probability": 4.57e-05,
-        "notes": "",
-        "links": [],
-        "children": [],
-        "calculatedProbability": 4.57e-05
-      },
-      {
-        "id": "pump_ccf",
-        "name": "ポンプ共通原因故障",
-        "type": "Event",
-        "probability": 6.9e-05,
-        "calculatedProbability": 6.9e-05,
-        "logicGate": "",
-        "notes": "βファクタ法 β=0.05（NUREG/CR-5497等の一般値）。同型・同保守のポンプに適用",
-        "children": [],
-        "links": []
-      },
-      {
-        "id": "upstream_power_loss",
-        "name": "上位電源の喪失（停電・母線故障）",
-        "type": "Event",
-        "probability": 5e-05,
-        "calculatedProbability": 5e-05,
-        "logicGate": "",
-        "notes": "暫定値。系統停電実績と非常用電源の有無に応じて要見直し",
-        "children": [],
-        "links": []
-      },
-      {
-        "id": "common_flowpath_fail",
-        "name": "共通流路の閉塞・水源喪失",
-        "type": "Event",
-        "probability": 0.0001,
-        "calculatedProbability": 0.0001,
-        "logicGate": "",
-        "notes": "暫定値。ストレーナ差圧監視の有無で大きく変わる",
-        "children": [],
-        "links": []
-      },
-      {
-        "id": "valve_misalignment",
-        "name": "整備後の手動弁閉止忘れ",
-        "type": "Event",
-        "probability": 3e-05,
-        "calculatedProbability": 3e-05,
-        "logicGate": "",
-        "notes": "HEP 1e-3程度 × 整備頻度から算出した暫定値。チェックリスト運用で低減可",
-        "children": [],
-        "links": []
+        "probability": 1.0,
+        "notes": "予備系固有の要因に加え、共通故障をリンクで共有",
+        "links": [
+          {
+            "target_id": "root_0_1",
+            "relation": "OR"
+          },
+          {
+            "target_id": "pump_ccf",
+            "relation": "OR"
+          },
+          {
+            "target_id": "common_suction_failure",
+            "relation": "OR"
+          },
+          {
+            "target_id": "water_source_loss",
+            "relation": "OR"
+          }
+        ],
+        "children": [
+          {
+            "id": "root_1_0",
+            "name": "予備ポンプの故障",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.00833,
+            "notes": "",
+            "links": [],
+            "children": [],
+            "calculatedProbability": 0.00833
+          },
+          {
+            "id": "root_1_1",
+            "name": "自動切替の失敗",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.00417,
+            "notes": "",
+            "links": [],
+            "children": [],
+            "calculatedProbability": 0.00417
+          },
+          {
+            "id": "root_1_2",
+            "name": "予備ポンプが整備中",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.00548,
+            "notes": "",
+            "links": [],
+            "children": [],
+            "calculatedProbability": 0.00548
+          },
+          {
+            "id": "standby_restoration_error",
+            "name": "整備後の復旧ミス（弁閉め忘れ等）",
+            "type": "Event",
+            "probability": 0.001,
+            "calculatedProbability": 0.001,
+            "logicGate": "",
+            "notes": "THERP等の一般的なHEP（1e-3〜3e-3）を参考にした暫定値。復旧確認チェックリストで低減可能",
+            "children": [],
+            "links": []
+          }
+        ],
+        "calculatedProbability": 0.0191182699483
       }
     ],
-    "calculatedProbability": 0.00031921238465
+    "calculatedProbability": 3.12356745607e-05
   },
   "analysis": {
     "missionTime": 8760.0,
