@@ -1,0 +1,15 @@
+{
+ "title": "冷却水が止まる（FMEAから）",
+ "date": "2026-10-10",
+ "mode": "FTA",
+ "tree": {
+  "id": "root",
+  "name": "冷却水が止まる",
+  "type": "Root",
+  "logicGate": "AND",
+  "probability": 1.0,
+  "notes": "",
+  "links": [],
+  "children": []
+ }
+}

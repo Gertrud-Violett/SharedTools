@@ -1,7 +1,7 @@
 # FTA Editor の例題（冷却水ポンプ）
 
 まきブログの FTA Editor の紹介記事（https://makkiblog.com/fta_editor_intro/）で使った、故障の木（FTA）とイベントツリー（ETA）のファイルです。
-[FTA Editor](https://github.com/Gertrud-Violett/FTA_Editor) で開けます（バージョン 1.7.2 で確認）。
+[FTA Editor](https://github.com/Gertrud-Violett/FTA_Editor) で開けます（バージョン 1.9.1 で確認）。
 
 Example fault trees and an event tree for the FTA Editor article on Makkiblog (in Japanese). The plant and all numbers are fictional.
 
@@ -28,12 +28,14 @@ Example fault trees and an event tree for the FTA Editor article on Makkiblog (i
 | `pump_2_kazuo.json` | かずおくんの木。電源を、常用と予備で別々の事象として数えている | 2.54e-5（ツリー計算） | 約13分 |
 | `pump_3_shared.json` | 電源（ブレーカ）を1つの事象にまとめ、リンクでつないだ木 | 7.03e-5（MCUB） | 約37分 |
 | `pump_4_models.json` | 同じ木を、故障率モデル（故障率と修理時間、試験の間隔）で入力したもの | 7.03e-5（MCUB） | 約37分 |
-| `pump_5_ai_applied.json` | AI（Claude）の提案11件を適用した直後の木。リンクが残っていて、「検証」タブに警告が1件出る | 3.19e-4（MCUB） | 約168分 |
-| `pump_6_ai_fixed.json` | 上の木を人が確認して直したもの（リンクを外し、入力が1つだけのゲートをなくした） | 3.19e-4（ツリー計算） | 約168分 |
+| `pump_5_ai_applied.json` | AI（Claude）の提案6件を適用した直後の木。適用でリンクも設定され、「検証」タブには何も出ない | 2.90e-4（MCUB） | 約153分 |
 | `eta_cooling_loss.json` | 冷却水が止まったあとの分かれ道（ETA）。確率は例題のための仮の値 | 設備を止める（生産停止のみ） 0.941、止めるのが遅れる（設備が過熱） 0.0495、警報が鳴らない（設備が過熱） 0.0100 | - |
+| `pump_0_fmea_start.json` | FMEA の取り込みを試すための、頂上事象だけの木 | - | - |
+| `pump_7_ccf.json` | 電源をまとめた木に、2台のポンプの共通原因故障（βファクタ、β=0.05。例題の仮の値）を足したもの | - | - |
+| `pump_fmea.csv` | FMEA の表（5行）。「FMEA 取り込み」で、故障モードごとに基事象を作る | - | - |
 
-- `pump_5_ai_applied.json` と `pump_6_ai_fixed.json` に入っている4つの事象（ポンプ共通原因故障、上位電源の喪失、共通流路の閉塞・水源喪失、整備後の手動弁閉止忘れ）と、その確率・メモは、AI（Claude、claude-opus-5-5）が提案したものです。AI自身が「暫定値」と断っている値で、根拠を確かめたものではありません。
-- 頂上事象の値は、FTA Editor 1.7.2 の画面上部に出る値です。同じ事象が2か所に出てくる木（リンクのある木）では、MCUB（最小カット上限）になります。
+- `pump_5_ai_applied.json` に入っている5つの事象（共通電源母線の故障、両ポンプの共通原因故障、共通吸込み系の閉塞、予備ポンプ吐出逆止弁の開失敗、整備後の復旧ミス）と、その確率・メモは、AI（Claude、claude-opus-5-5）が提案したものです。AI自身が「暫定値」と断っている値で、根拠を確かめたものではありません。`pump_6_ai_fixed.json` は以前の記事で使った名前で、v1.9.1 では `pump_5_ai_applied.json` と同じ中身です。
+- 頂上事象の値は、FTA Editor 1.9.1 の画面上部に出る値です。同じ事象が2か所に出てくる木（リンクのある木）では、MCUB（最小カット上限）になります。
 
 ## 開き方
 
