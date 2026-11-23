@@ -1,6 +1,6 @@
 # FTA Editor の例題（冷却水ポンプ）
 
-まきブログの FTA Editor の紹介記事（https://makkiblog.com/fta_editor_intro/）で使った、故障の木（FTA）とイベントツリー（ETA）のファイルです。
+まきブログの FTA Editor の紹介記事で使った、故障の木（FTA）とイベントツリー（ETA）のファイルです。
 [FTA Editor](https://github.com/Gertrud-Violett/FTA_Editor) で開けます（バージョン 1.9.1 で確認）。
 
 Example fault trees and an event tree for the FTA Editor article on Makkiblog (in Japanese). The plant and all numbers are fictional.
@@ -48,6 +48,10 @@ Example fault trees and an event tree for the FTA Editor article on Makkiblog (i
 ```
 > fta_editor.exe quantify pump_3_shared.json
 ```
+
+## ほかの例題
+
+- [`fukushima/`](fukushima/)：福島第一原子力発電所の全交流電源喪失を例にした、学習用の故障の木（FTA Editor 1.9.2）。説明はフォルダーの中の README にあります。
 
 ## ライセンス
 

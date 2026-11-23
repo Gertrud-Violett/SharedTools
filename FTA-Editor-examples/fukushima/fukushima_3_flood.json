@@ -1,0 +1,327 @@
+{
+  "title": "福島第一 全交流電源喪失（津波による浸水を 1 つの事象で入れた版）",
+  "date": "2026-11-20",
+  "mode": "FTA",
+  "analysis": {
+    "missionTime": 8
+  },
+  "tree": {
+    "id": "root",
+    "name": "全交流電源喪失",
+    "type": "Root",
+    "logicGate": "AND",
+    "probability": 1.0,
+    "notes": "学習用の単純化（1 号機分・クロスタイなし・外部電源の回復なし）。再評価ではない。",
+    "links": [],
+    "children": [
+      {
+        "id": "loop",
+        "name": "外部電源喪失",
+        "type": "Event",
+        "logicGate": "OR",
+        "probability": 0.0359,
+        "notes": "単位: /炉臨界年（per reactor critical year）。出典: NUREG/CR-6890 Vol.1 (2005-12), Table ES-1, p.xii（臨界運転中 1997-2004、724.3 炉臨界年の米国データ。Jeffreys 事前分布の平均）。期間: 米国 1997〜2004年の運転中のデータ（NUREG/CR-6890 表ES-1）。米国の臨界運転中のデータ（1997-2004）を代わりに使った値。1 年あたりの頻度を確率として入れている（値が小さいので近似として成り立つ）。",
+        "links": [],
+        "children": []
+      },
+      {
+        "id": "edgA",
+        "name": "EDG A 系統から給電できない",
+        "type": "Event",
+        "logicGate": "OR",
+        "probability": 1.0,
+        "notes": "",
+        "links": [],
+        "children": [
+          {
+            "id": "edgA_body",
+            "name": "EDG A 本体の故障",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "",
+            "links": [],
+            "children": [
+              {
+                "id": "edgA_fts",
+                "name": "EDG A 起動失敗",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.00453,
+                "notes": "単位: /起動要求（per demand）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（Beta(1.075, 236.30) の平均）。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。",
+                "links": [],
+                "children": []
+              },
+              {
+                "id": "edgA_ftlr",
+                "name": "EDG A 負荷投入・運転初期の失敗",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0029,
+                "notes": "単位: /要求（per demand, 負荷投入・運転初期 1 時間）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（Beta(1.411, 485.60) の平均）。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。",
+                "links": [],
+                "children": []
+              },
+              {
+                "id": "edgA_ftr",
+                "name": "EDG A 運転継続の失敗（1〜8時間）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.005918416760573063,
+                "notes": "単位: /時間（per hour）, 1 時間後から 7 時間 = 任務 8 時間。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（FTR>1H, Gamma(2.010, 2371.00)）; 7 時間で 8 時間任務: p.9。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。確率は 1−exp(−λT)（ツールが計算）。",
+                "links": [],
+                "children": [],
+                "quant": {
+                  "model": "rate",
+                  "lambda": 0.000848,
+                  "T": 7.0,
+                  "source": "INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（FTR>1H, Gamma(2.010, 2371.00)）; 7 時間で 8 時間任務: p.9"
+                }
+              },
+              {
+                "id": "edgA_ua",
+                "name": "EDG A 点検などで待機除外",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.012,
+                "notes": "単位: （不稼働率、無次元）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 4, p.7（Beta(4.00, 329.33) の平均）。期間: 米国 2002〜2004年のデータ（INL 2011 表4）。",
+                "links": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "edgA_pump",
+            "name": "EDG Aの海水ポンプが使えない",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "水冷式: 冷却用の海水ポンプ（屋外・海側）が必要。",
+            "links": [],
+            "children": [
+              {
+                "id": "edgA_pump_rand",
+                "name": "EDG Aの海水ポンプ（ランダム故障、値なし）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0,
+                "notes": "ランダム故障の値は出典の表にないため入れていない（0）。0は現実の値ではない（故障を無視する単純化）。",
+                "links": [],
+                "children": []
+              },
+              {
+                "id": "flood",
+                "name": "津波による浸水",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 1.0,
+                "notes": "確率は現実の値ではない。1 =「浸水が起きたとして」の条件。ここの値を変えると浸水の確率を動かせる（What-if / 掃引）。本木の電源盤・海水ポンプの被水はこの 1 つの事象につないである。",
+                "links": [],
+                "children": [],
+                "eventKind": "basic"
+              }
+            ]
+          },
+          {
+            "id": "edgA_mc",
+            "name": "EDG Aの M/C（高圧電源盤）が使えない",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "電源盤がないと EDG が動いても給電できない。",
+            "links": [
+              {
+                "target_id": "flood",
+                "relation": "OR"
+              }
+            ],
+            "children": [
+              {
+                "id": "edgA_mc_rand",
+                "name": "EDG Aの M/C（高圧電源盤）（ランダム故障、値なし）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0,
+                "notes": "ランダム故障の値は出典の表にないため入れていない（0）。0は現実の値ではない（故障を無視する単純化）。",
+                "links": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "edgA_pc",
+            "name": "EDG Aの P/C（低圧電源盤）が使えない",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "電源盤がないと EDG が動いても給電できない。",
+            "links": [
+              {
+                "target_id": "flood",
+                "relation": "OR"
+              }
+            ],
+            "children": [
+              {
+                "id": "edgA_pc_rand",
+                "name": "EDG Aの P/C（低圧電源盤）（ランダム故障、値なし）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0,
+                "notes": "ランダム故障の値は出典の表にないため入れていない（0）。0は現実の値ではない（故障を無視する単純化）。",
+                "links": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "edgB",
+        "name": "EDG B 系統から給電できない",
+        "type": "Event",
+        "logicGate": "OR",
+        "probability": 1.0,
+        "notes": "",
+        "links": [],
+        "children": [
+          {
+            "id": "edgB_body",
+            "name": "EDG B 本体の故障",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "",
+            "links": [],
+            "children": [
+              {
+                "id": "edgB_fts",
+                "name": "EDG B 起動失敗",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.00453,
+                "notes": "単位: /起動要求（per demand）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（Beta(1.075, 236.30) の平均）。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。",
+                "links": [],
+                "children": []
+              },
+              {
+                "id": "edgB_ftlr",
+                "name": "EDG B 負荷投入・運転初期の失敗",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0029,
+                "notes": "単位: /要求（per demand, 負荷投入・運転初期 1 時間）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（Beta(1.411, 485.60) の平均）。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。",
+                "links": [],
+                "children": []
+              },
+              {
+                "id": "edgB_ftr",
+                "name": "EDG B 運転継続の失敗（1〜8時間）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.005918416760573063,
+                "notes": "単位: /時間（per hour）, 1 時間後から 7 時間 = 任務 8 時間。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（FTR>1H, Gamma(2.010, 2371.00)）; 7 時間で 8 時間任務: p.9。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。確率は 1−exp(−λT)（ツールが計算）。",
+                "links": [],
+                "children": [],
+                "quant": {
+                  "model": "rate",
+                  "lambda": 0.000848,
+                  "T": 7.0,
+                  "source": "INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（FTR>1H, Gamma(2.010, 2371.00)）; 7 時間で 8 時間任務: p.9"
+                }
+              },
+              {
+                "id": "edgB_ua",
+                "name": "EDG B 点検などで待機除外",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.012,
+                "notes": "単位: （不稼働率、無次元）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 4, p.7（Beta(4.00, 329.33) の平均）。期間: 米国 2002〜2004年のデータ（INL 2011 表4）。",
+                "links": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "edgB_pump",
+            "name": "EDG Bの海水ポンプが使えない",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "水冷式: 冷却用の海水ポンプ（屋外・海側）が必要。",
+            "links": [
+              {
+                "target_id": "flood",
+                "relation": "OR"
+              }
+            ],
+            "children": [
+              {
+                "id": "edgB_pump_rand",
+                "name": "EDG Bの海水ポンプ（ランダム故障、値なし）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0,
+                "notes": "ランダム故障の値は出典の表にないため入れていない（0）。0は現実の値ではない（故障を無視する単純化）。",
+                "links": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "edgB_mc",
+            "name": "EDG Bの M/C（高圧電源盤）が使えない",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "電源盤がないと EDG が動いても給電できない。",
+            "links": [
+              {
+                "target_id": "flood",
+                "relation": "OR"
+              }
+            ],
+            "children": [
+              {
+                "id": "edgB_mc_rand",
+                "name": "EDG Bの M/C（高圧電源盤）（ランダム故障、値なし）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0,
+                "notes": "ランダム故障の値は出典の表にないため入れていない（0）。0は現実の値ではない（故障を無視する単純化）。",
+                "links": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "edgB_pc",
+            "name": "EDG Bの P/C（低圧電源盤）が使えない",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "電源盤がないと EDG が動いても給電できない。",
+            "links": [
+              {
+                "target_id": "flood",
+                "relation": "OR"
+              }
+            ],
+            "children": [
+              {
+                "id": "edgB_pc_rand",
+                "name": "EDG Bの P/C（低圧電源盤）（ランダム故障、値なし）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0,
+                "notes": "ランダム故障の値は出典の表にないため入れていない（0）。0は現実の値ではない（故障を無視する単純化）。",
+                "links": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
