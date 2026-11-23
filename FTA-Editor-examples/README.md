@@ -1,6 +1,6 @@
 # FTA Editor の例題（冷却水ポンプ）
 
-まきブログの FTA Editor の紹介記事（https://makkiblog.com/fta_editor_intro/）で使った、故障の木（FTA）とイベントツリー（ETA）のファイルです。
+まきブログの FTA Editor の紹介記事で使った、故障の木（FTA）とイベントツリー（ETA）のファイルです。
 [FTA Editor](https://github.com/Gertrud-Violett/FTA_Editor) で開けます（バージョン 1.9.1 で確認）。
 
 Example fault trees and an event tree for the FTA Editor article on Makkiblog (in Japanese). The plant and all numbers are fictional.
