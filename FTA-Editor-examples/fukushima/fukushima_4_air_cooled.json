@@ -1,0 +1,353 @@
+{
+  "title": "福島第一 空冷 EDG の 2B・4B・6B（電源盤の場所の違い）",
+  "date": "2026-11-20",
+  "mode": "FTA",
+  "analysis": {
+    "missionTime": 8
+  },
+  "tree": {
+    "id": "root",
+    "name": "空冷 EDG のどれかの系統から給電できない",
+    "type": "Root",
+    "logicGate": "OR",
+    "probability": 1.0,
+    "notes": "学習用の単純化。外部電源喪失との AND は取らず、系統ごとに「給電できるか」だけを見る。",
+    "links": [],
+    "children": [
+      {
+        "id": "d2B",
+        "name": "2号機 B系 EDG 系統から給電できない",
+        "type": "Event",
+        "logicGate": "OR",
+        "probability": 1.0,
+        "notes": "",
+        "links": [],
+        "children": [
+          {
+            "id": "d2B_body",
+            "name": "2号機 B系 EDG 本体の故障",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "空冷式: 冷却用の海水ポンプは要らない。",
+            "links": [],
+            "children": [
+              {
+                "id": "d2B_fts",
+                "name": "2号機 B系 EDG 起動失敗",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.00453,
+                "notes": "単位: /起動要求（per demand）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（Beta(1.075, 236.30) の平均）。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。",
+                "links": [],
+                "children": []
+              },
+              {
+                "id": "d2B_ftlr",
+                "name": "2号機 B系 EDG 負荷投入・運転初期の失敗",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0029,
+                "notes": "単位: /要求（per demand, 負荷投入・運転初期 1 時間）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（Beta(1.411, 485.60) の平均）。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。",
+                "links": [],
+                "children": []
+              },
+              {
+                "id": "d2B_ftr",
+                "name": "2号機 B系 EDG 運転継続の失敗（1〜8時間）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.005918416760573063,
+                "notes": "単位: /時間（per hour）, 1 時間後から 7 時間 = 任務 8 時間。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（FTR>1H, Gamma(2.010, 2371.00)）; 7 時間で 8 時間任務: p.9。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。確率は 1−exp(−λT)（ツールが計算）。",
+                "links": [],
+                "children": [],
+                "quant": {
+                  "model": "rate",
+                  "lambda": 0.000848,
+                  "T": 7.0,
+                  "source": "INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（FTR>1H, Gamma(2.010, 2371.00)）; 7 時間で 8 時間任務: p.9"
+                }
+              },
+              {
+                "id": "d2B_ua",
+                "name": "2号機 B系 EDG 点検などで待機除外",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.012,
+                "notes": "単位: （不稼働率、無次元）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 4, p.7（Beta(4.00, 329.33) の平均）。期間: 米国 2002〜2004年のデータ（INL 2011 表4）。",
+                "links": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "d2B_mc",
+            "name": "2号機 B系 EDGのM/Cが使えない",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "設置場所: 共用プール建屋の地下 1 階の電気室（浸水した）。出典: 東京電力 福島原子力事故調査報告書 本編, p.107（2B・4B の EDG 本体は被水せず、電源盤が被水）。",
+            "links": [],
+            "children": [
+              {
+                "id": "d2B_mc_rand",
+                "name": "2号機 B系 EDGのM/C（ランダム故障、値なし）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0,
+                "notes": "ランダム故障の値は出典の表にないため入れていない（0）。0は現実の値ではない（故障を無視する単純化）。",
+                "links": [],
+                "children": []
+              },
+              {
+                "id": "flood",
+                "name": "津波による浸水",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 1.0,
+                "notes": "確率は現実の値ではない。1 =「浸水が起きたとして」の条件。ここの値を変えると浸水の確率を動かせる（What-if / 掃引）。本木の電源盤・海水ポンプの被水はこの 1 つの事象につないである。",
+                "links": [],
+                "children": [],
+                "eventKind": "basic"
+              }
+            ]
+          },
+          {
+            "id": "d2B_pc",
+            "name": "2号機 B系 EDGのP/Cが使えない",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "設置場所: 共用プール建屋の地下 1 階の電気室（浸水した）。出典: 東京電力 福島原子力事故調査報告書 本編, p.107（2B・4B の EDG 本体は被水せず、電源盤が被水）。",
+            "links": [
+              {
+                "target_id": "flood",
+                "relation": "OR"
+              }
+            ],
+            "children": [
+              {
+                "id": "d2B_pc_rand",
+                "name": "2号機 B系 EDGのP/C（ランダム故障、値なし）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0,
+                "notes": "ランダム故障の値は出典の表にないため入れていない（0）。0は現実の値ではない（故障を無視する単純化）。",
+                "links": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "d4B",
+        "name": "4号機 B系 EDG 系統から給電できない",
+        "type": "Event",
+        "logicGate": "OR",
+        "probability": 1.0,
+        "notes": "",
+        "links": [],
+        "children": [
+          {
+            "id": "d4B_body",
+            "name": "4号機 B系 EDG 本体の故障",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "空冷式: 冷却用の海水ポンプは要らない。",
+            "links": [],
+            "children": [
+              {
+                "id": "d4B_fts",
+                "name": "4号機 B系 EDG 起動失敗",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.00453,
+                "notes": "単位: /起動要求（per demand）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（Beta(1.075, 236.30) の平均）。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。",
+                "links": [],
+                "children": []
+              },
+              {
+                "id": "d4B_ftlr",
+                "name": "4号機 B系 EDG 負荷投入・運転初期の失敗",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0029,
+                "notes": "単位: /要求（per demand, 負荷投入・運転初期 1 時間）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（Beta(1.411, 485.60) の平均）。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。",
+                "links": [],
+                "children": []
+              },
+              {
+                "id": "d4B_ftr",
+                "name": "4号機 B系 EDG 運転継続の失敗（1〜8時間）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.005918416760573063,
+                "notes": "単位: /時間（per hour）, 1 時間後から 7 時間 = 任務 8 時間。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（FTR>1H, Gamma(2.010, 2371.00)）; 7 時間で 8 時間任務: p.9。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。確率は 1−exp(−λT)（ツールが計算）。",
+                "links": [],
+                "children": [],
+                "quant": {
+                  "model": "rate",
+                  "lambda": 0.000848,
+                  "T": 7.0,
+                  "source": "INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（FTR>1H, Gamma(2.010, 2371.00)）; 7 時間で 8 時間任務: p.9"
+                }
+              },
+              {
+                "id": "d4B_ua",
+                "name": "4号機 B系 EDG 点検などで待機除外",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.012,
+                "notes": "単位: （不稼働率、無次元）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 4, p.7（Beta(4.00, 329.33) の平均）。期間: 米国 2002〜2004年のデータ（INL 2011 表4）。",
+                "links": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "d4B_mc",
+            "name": "4号機 B系 EDGのM/Cが使えない",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "設置場所: 共用プール建屋の地下 1 階の電気室（浸水した）。出典: 同上 p.107（2B と同様）。",
+            "links": [
+              {
+                "target_id": "flood",
+                "relation": "OR"
+              }
+            ],
+            "children": [
+              {
+                "id": "d4B_mc_rand",
+                "name": "4号機 B系 EDGのM/C（ランダム故障、値なし）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0,
+                "notes": "ランダム故障の値は出典の表にないため入れていない（0）。0は現実の値ではない（故障を無視する単純化）。",
+                "links": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "d4B_pc",
+            "name": "4号機 B系 EDGのP/Cが使えない",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "設置場所: 共用プール建屋の地下 1 階の電気室（浸水した）。出典: 同上 p.107（2B と同様）。",
+            "links": [
+              {
+                "target_id": "flood",
+                "relation": "OR"
+              }
+            ],
+            "children": [
+              {
+                "id": "d4B_pc_rand",
+                "name": "4号機 B系 EDGのP/C（ランダム故障、値なし）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0,
+                "notes": "ランダム故障の値は出典の表にないため入れていない（0）。0は現実の値ではない（故障を無視する単純化）。",
+                "links": [],
+                "children": []
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "d6B",
+        "name": "6号機 B系 EDG 系統から給電できない",
+        "type": "Event",
+        "logicGate": "OR",
+        "probability": 1.0,
+        "notes": "",
+        "links": [],
+        "children": [
+          {
+            "id": "d6B_body",
+            "name": "6号機 B系 EDG 本体の故障",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 1.0,
+            "notes": "空冷式: 冷却用の海水ポンプは要らない。",
+            "links": [],
+            "children": [
+              {
+                "id": "d6B_fts",
+                "name": "6号機 B系 EDG 起動失敗",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.00453,
+                "notes": "単位: /起動要求（per demand）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（Beta(1.075, 236.30) の平均）。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。",
+                "links": [],
+                "children": []
+              },
+              {
+                "id": "d6B_ftlr",
+                "name": "6号機 B系 EDG 負荷投入・運転初期の失敗",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.0029,
+                "notes": "単位: /要求（per demand, 負荷投入・運転初期 1 時間）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（Beta(1.411, 485.60) の平均）。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。",
+                "links": [],
+                "children": []
+              },
+              {
+                "id": "d6B_ftr",
+                "name": "6号機 B系 EDG 運転継続の失敗（1〜8時間）",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.005918416760573063,
+                "notes": "単位: /時間（per hour）, 1 時間後から 7 時間 = 任務 8 時間。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（FTR>1H, Gamma(2.010, 2371.00)）; 7 時間で 8 時間任務: p.9。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。確率は 1−exp(−λT)（ツールが計算）。",
+                "links": [],
+                "children": [],
+                "quant": {
+                  "model": "rate",
+                  "lambda": 0.000848,
+                  "T": 7.0,
+                  "source": "INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（FTR>1H, Gamma(2.010, 2371.00)）; 7 時間で 8 時間任務: p.9"
+                }
+              },
+              {
+                "id": "d6B_ua",
+                "name": "6号機 B系 EDG 点検などで待機除外",
+                "type": "Event",
+                "logicGate": "OR",
+                "probability": 0.012,
+                "notes": "単位: （不稼働率、無次元）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 4, p.7（Beta(4.00, 329.33) の平均）。期間: 米国 2002〜2004年のデータ（INL 2011 表4）。",
+                "links": [],
+                "children": []
+              }
+            ]
+          },
+          {
+            "id": "d6B_mc_rand",
+            "name": "6号機 B系 EDGのM/Cが使えない（ランダム故障、値なし）",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.0,
+            "notes": "ランダム故障の値は出典の表にないため入れていない（0）。0は現実の値ではない（故障を無視する単純化）。 設置場所: 6B 専用の建屋（浸水しなかった）。出典: 同上 p.108（給気ルーバ下端が浸水高より上、貫通部なし、M/C・P/C は被水せず）。",
+            "links": [],
+            "children": []
+          },
+          {
+            "id": "d6B_pc_rand",
+            "name": "6号機 B系 EDGのP/Cが使えない（ランダム故障、値なし）",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.0,
+            "notes": "ランダム故障の値は出典の表にないため入れていない（0）。0は現実の値ではない（故障を無視する単純化）。 設置場所: 6B 専用の建屋（浸水しなかった）。出典: 同上 p.108（給気ルーバ下端が浸水高より上、貫通部なし、M/C・P/C は被水せず）。",
+            "links": [],
+            "children": []
+          }
+        ]
+      }
+    ]
+  }
+}

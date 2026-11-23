@@ -1,0 +1,143 @@
+{
+  "title": "福島第一 全交流電源喪失（1号機分・独立と仮定）",
+  "date": "2026-11-20",
+  "mode": "FTA",
+  "analysis": {
+    "missionTime": 8
+  },
+  "tree": {
+    "id": "root",
+    "name": "全交流電源喪失",
+    "type": "Root",
+    "logicGate": "AND",
+    "probability": 1.0,
+    "notes": "学習用の単純化（1 号機分・クロスタイなし・外部電源の回復なし）。再評価ではない。",
+    "links": [],
+    "children": [
+      {
+        "id": "loop",
+        "name": "外部電源喪失",
+        "type": "Event",
+        "logicGate": "OR",
+        "probability": 0.0359,
+        "notes": "単位: /炉臨界年（per reactor critical year）。出典: NUREG/CR-6890 Vol.1 (2005-12), Table ES-1, p.xii（臨界運転中 1997-2004、724.3 炉臨界年の米国データ。Jeffreys 事前分布の平均）。期間: 米国 1997〜2004年の運転中のデータ（NUREG/CR-6890 表ES-1）。米国の臨界運転中のデータ（1997-2004）を代わりに使った値。1 年あたりの頻度を確率として入れている（値が小さいので近似として成り立つ）。",
+        "links": [],
+        "children": []
+      },
+      {
+        "id": "edgA",
+        "name": "EDG A 使用不能",
+        "type": "Event",
+        "logicGate": "OR",
+        "probability": 1.0,
+        "notes": "",
+        "links": [],
+        "children": [
+          {
+            "id": "edgA_fts",
+            "name": "EDG A 起動失敗",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.00453,
+            "notes": "単位: /起動要求（per demand）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（Beta(1.075, 236.30) の平均）。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。",
+            "links": [],
+            "children": []
+          },
+          {
+            "id": "edgA_ftlr",
+            "name": "EDG A 負荷投入・運転初期の失敗",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.0029,
+            "notes": "単位: /要求（per demand, 負荷投入・運転初期 1 時間）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（Beta(1.411, 485.60) の平均）。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。",
+            "links": [],
+            "children": []
+          },
+          {
+            "id": "edgA_ftr",
+            "name": "EDG A 運転継続の失敗（1〜8時間）",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.005918416760573063,
+            "notes": "単位: /時間（per hour）, 1 時間後から 7 時間 = 任務 8 時間。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（FTR>1H, Gamma(2.010, 2371.00)）; 7 時間で 8 時間任務: p.9。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。確率は 1−exp(−λT)（ツールが計算）。",
+            "links": [],
+            "children": [],
+            "quant": {
+              "model": "rate",
+              "lambda": 0.000848,
+              "T": 7.0,
+              "source": "INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（FTR>1H, Gamma(2.010, 2371.00)）; 7 時間で 8 時間任務: p.9"
+            }
+          },
+          {
+            "id": "edgA_ua",
+            "name": "EDG A 点検などで待機除外",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.012,
+            "notes": "単位: （不稼働率、無次元）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 4, p.7（Beta(4.00, 329.33) の平均）。期間: 米国 2002〜2004年のデータ（INL 2011 表4）。",
+            "links": [],
+            "children": []
+          }
+        ]
+      },
+      {
+        "id": "edgB",
+        "name": "EDG B 使用不能",
+        "type": "Event",
+        "logicGate": "OR",
+        "probability": 1.0,
+        "notes": "",
+        "links": [],
+        "children": [
+          {
+            "id": "edgB_fts",
+            "name": "EDG B 起動失敗",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.00453,
+            "notes": "単位: /起動要求（per demand）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（Beta(1.075, 236.30) の平均）。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。",
+            "links": [],
+            "children": []
+          },
+          {
+            "id": "edgB_ftlr",
+            "name": "EDG B 負荷投入・運転初期の失敗",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.0029,
+            "notes": "単位: /要求（per demand, 負荷投入・運転初期 1 時間）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（Beta(1.411, 485.60) の平均）。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。",
+            "links": [],
+            "children": []
+          },
+          {
+            "id": "edgB_ftr",
+            "name": "EDG B 運転継続の失敗（1〜8時間）",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.005918416760573063,
+            "notes": "単位: /時間（per hour）, 1 時間後から 7 時間 = 任務 8 時間。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（FTR>1H, Gamma(2.010, 2371.00)）; 7 時間で 8 時間任務: p.9。期間: 米国 1998〜2002年のデータ（INL 2011 表2 = NUREG/CR-6928 の値）。確率は 1−exp(−λT)（ツールが計算）。",
+            "links": [],
+            "children": [],
+            "quant": {
+              "model": "rate",
+              "lambda": 0.000848,
+              "T": 7.0,
+              "source": "INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 2, p.3（FTR>1H, Gamma(2.010, 2371.00)）; 7 時間で 8 時間任務: p.9"
+            }
+          },
+          {
+            "id": "edgB_ua",
+            "name": "EDG B 点検などで待機除外",
+            "type": "Event",
+            "logicGate": "OR",
+            "probability": 0.012,
+            "notes": "単位: （不稼働率、無次元）。出典: INL, Enhanced Component Performance Study: Emergency Diesel Generators 1998-2009 (2011-01), Table 4, p.7（Beta(4.00, 329.33) の平均）。期間: 米国 2002〜2004年のデータ（INL 2011 表4）。",
+            "links": [],
+            "children": []
+          }
+        ]
+      }
+    ]
+  }
+}

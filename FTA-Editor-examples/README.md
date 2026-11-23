@@ -49,6 +49,10 @@ Example fault trees and an event tree for the FTA Editor article on Makkiblog (i
 > fta_editor.exe quantify pump_3_shared.json
 ```
 
+## ほかの例題
+
+- [`fukushima/`](fukushima/)：福島第一原子力発電所の全交流電源喪失を例にした、学習用の故障の木（FTA Editor 1.9.2）。説明はフォルダーの中の README にあります。
+
 ## ライセンス
 
 このリポジトリの LICENSE（MIT）に従います。
